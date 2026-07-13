@@ -9,6 +9,7 @@ from .backup import BackupStore
 from .capabilities import KNOWN_TOOLS, detect_capabilities
 from .config import load_config
 from .engine import Engine
+from .format import human_size
 from .job import JobStatus, OptimizationJob
 
 
@@ -17,14 +18,6 @@ def _backup_root() -> Path:
     if override:
         return Path(override)
     return Path.home() / ".local" / "share" / "clop-kde" / "backups"
-
-
-def _human(n: int) -> str:
-    for unit in ("B", "KB", "MB", "GB"):
-        if n < 1024 or unit == "GB":
-            return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"
-        n /= 1024
-    return f"{n:.0f}B"
 
 
 def _build_engine() -> Engine:
@@ -56,8 +49,8 @@ def _cmd_optimize(args) -> int:
         if result.status == JobStatus.OPTIMIZED:
             print(
                 f"optimized {path.name}: "
-                f"{_human(result.original_size)} -> {_human(result.new_size)} "
-                f"(saved {_human(result.saved_bytes)}, undo id {result.backup_id})"
+                f"{human_size(result.original_size)} -> {human_size(result.new_size)} "
+                f"(saved {human_size(result.saved_bytes)}, undo id {result.backup_id})"
             )
         elif result.status == JobStatus.ERROR:
             print(f"error {path.name}: {result.message}", file=sys.stderr)

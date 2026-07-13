@@ -4,29 +4,9 @@ from pathlib import Path
 import pytest
 
 from clop_kde.backup import BackupStore
-from clop_kde.cli import _human, main
+from clop_kde.cli import main
 from clop_kde.config import Config
 from clop_kde.engine import Engine
-
-
-def test_human_bytes():
-    assert _human(500) == "500B"
-
-
-def test_human_kilobytes():
-    assert _human(2048) == "2.0KB"
-
-
-def test_human_kilobytes_fractional():
-    assert _human(1536) == "1.5KB"
-
-
-def test_human_megabytes():
-    assert _human(1048576) == "1.0MB"
-
-
-def test_human_gigabytes():
-    assert _human(3 * 1024**3) == "3.0GB"
 
 
 def test_caps_lists_tools(capsys, monkeypatch):
