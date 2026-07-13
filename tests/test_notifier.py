@@ -158,3 +158,39 @@ class QDBusConnectionForTest:
         from PySide6.QtDBus import QDBusConnection
 
         self.connection = QDBusConnection.sessionBus()
+
+
+def test_generic_notify_with_undo_callback_invokes_it():
+    backend = FakeBackend()
+    notifier = Notifier(backend=backend)  # no undo_fn needed
+    called = []
+    nid = notifier.notify("Clipboard image", "1.0KB → 0.4KB (-60%)",
+                          undo=lambda: called.append("undone"),
+                          undo_confirm="Restored image to clipboard")
+
+    sent_id, summary, body, actions, _ = backend.sent[0]
+    assert sent_id == nid
+    assert ("undo", "Undo") in actions
+    backend.on_action(nid, "undo")
+    assert called == ["undone"]
+    # undo_confirm follow-up was sent
+    assert any("Restored image to clipboard" in s or "Restored image to clipboard" in b
+               for _, s, b, _, _ in backend.sent[1:])
+
+
+def test_generic_notify_without_undo_has_no_action():
+    backend = FakeBackend()
+    notifier = Notifier(backend=backend)
+    notifier.notify("hello", "world")
+    _, _, _, actions, _ = backend.sent[0]
+    assert actions == []
+
+
+def test_generic_notify_undo_is_one_shot():
+    backend = FakeBackend()
+    notifier = Notifier(backend=backend)
+    calls = []
+    nid = notifier.notify("s", "b", undo=lambda: calls.append(1))
+    backend.on_action(nid, "undo")
+    backend.on_action(nid, "undo")  # second time: id already forgotten
+    assert calls == [1]

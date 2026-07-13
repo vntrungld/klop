@@ -22,17 +22,32 @@ class NotificationBackend(Protocol):
 
 
 class Notifier(QObject):
-    """Turns JobResults into desktop notifications and handles the Undo action."""
+    """Turns results into desktop notifications and handles the Undo action.
 
-    def __init__(self, backend, undo_fn: Callable[[str], object], icon: str = "", parent=None):
+    Undo is a per-notification callback, so both file-restore (M1) and
+    clipboard-restore (M2) go through the same path."""
+
+    def __init__(self, backend, undo_fn: Callable[[str], object] | None = None,
+                 icon: str = "", parent=None):
         super().__init__(parent)
         self._backend = backend
         self._undo_fn = undo_fn
         self._icon = icon
-        # notification id -> (backup_id, filename)
-        self._undo_map: dict[int, tuple[str, str]] = {}
+        # notification id -> (undo_callback, undo_confirm_text_or_None)
+        self._undo_map: dict[int, tuple[Callable[[], object], str | None]] = {}
         backend.on_action = self._on_action
         backend.on_closed = self._on_closed
+
+    def notify(self, summary: str, body: str, *,
+               undo: Callable[[], object] | None = None,
+               undo_confirm: str | None = None,
+               icon: str | None = None) -> int:
+        actions = [("undo", "Undo")] if undo is not None else []
+        nid = self._backend.send(summary, body, actions,
+                                 self._icon if icon is None else icon)
+        if undo is not None:
+            self._undo_map[nid] = (undo, undo_confirm)
+        return nid
 
     def notify_result(self, result: JobResult) -> None:
         name = result.path.name
@@ -42,10 +57,12 @@ class Notifier(QObject):
                 f"{human_size(result.new_size)} "
                 f"(-{percent_saved(result.original_size, result.new_size)}%)"
             )
-            nid = self._backend.send(name, body, [("undo", "Undo")], self._icon)
-            self._undo_map[nid] = (result.backup_id, name)
+            backup_id = result.backup_id
+            self.notify(name, body,
+                        undo=lambda: self._undo_fn(backup_id) if self._undo_fn else None,
+                        undo_confirm=f"Restored {name}")
         elif result.status == JobStatus.ERROR:
-            self._backend.send(name, f"Optimization failed: {result.message}", [], self._icon)
+            self.notify(name, f"Optimization failed: {result.message}")
         # UNCHANGED / SKIPPED: intentionally silent
 
     def _on_action(self, notification_id: int, action_key: str) -> None:
@@ -54,9 +71,10 @@ class Notifier(QObject):
         entry = self._undo_map.pop(notification_id, None)
         if entry is None:
             return
-        backup_id, name = entry
-        self._undo_fn(backup_id)
-        self._backend.send(f"Restored {name}", f"Restored {name}", [], self._icon)
+        undo, undo_confirm = entry
+        undo()
+        if undo_confirm is not None:
+            self._backend.send(undo_confirm, undo_confirm, [], self._icon)
 
     def _on_closed(self, notification_id: int) -> None:
         self._undo_map.pop(notification_id, None)
