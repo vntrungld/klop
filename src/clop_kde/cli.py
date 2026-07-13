@@ -72,6 +72,12 @@ def _cmd_undo(args) -> int:
     return 0
 
 
+def _cmd_daemon(_args) -> int:
+    from .daemon import run_daemon  # lazy: keeps Qt out of the headless CLI import path
+
+    return run_daemon()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="clop-kde")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -86,6 +92,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p_caps = sub.add_parser("caps", help="show detected optimizer tools")
     p_caps.set_defaults(func=_cmd_caps)
+
+    p_daemon = sub.add_parser("daemon", help="run the system-tray daemon")
+    p_daemon.set_defaults(func=_cmd_daemon)
 
     args = parser.parse_args(argv)
     return args.func(args)
