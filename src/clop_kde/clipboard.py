@@ -89,6 +89,8 @@ class ClipboardWatcher(QObject):
     output with a bounded content-hash set."""
 
     optimized = Signal(object)  # ClipboardResult
+    started = Signal(object)  # original PNG bytes (job began)
+    finished = Signal()  # job finished (either outcome)
     _result_ready = Signal(object, str, object)  # (original_bytes, digest, optimized|None)
 
     def __init__(self, clipboard, optimize_fn, parent=None):
@@ -152,17 +154,18 @@ class ClipboardWatcher(QObject):
         self._remember(digest)  # mark in-flight before starting the worker so a
         # repeated dataChanged for the same content (e.g. Klipper firing twice
         # per copy) doesn't race a second worker into existence.
+        self.started.emit(png)
         self._pool.start(_ClipRunnable(self, png, digest))
 
     def _on_result_ready(self, original: bytes, digest: str, optimized) -> None:
         self._remember(digest)  # don't reprocess this exact input
-        if optimized is None:
-            return
-        self._remember(content_hash(optimized))
-        self._undo_counter += 1
-        token = str(self._undo_counter)
-        self._undo_store[token] = original
-        while len(self._undo_store) > _UNDO_MAX:
-            self._undo_store.popitem(last=False)
-        self._set_clipboard_png(optimized)
-        self.optimized.emit(ClipboardResult(len(original), len(optimized), token))
+        if optimized is not None:
+            self._remember(content_hash(optimized))
+            self._undo_counter += 1
+            token = str(self._undo_counter)
+            self._undo_store[token] = original
+            while len(self._undo_store) > _UNDO_MAX:
+                self._undo_store.popitem(last=False)
+            self._set_clipboard_png(optimized)
+            self.optimized.emit(ClipboardResult(len(original), len(optimized), token))
+        self.finished.emit()

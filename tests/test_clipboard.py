@@ -221,3 +221,32 @@ def test_watcher_dedupes_repeated_dataChanged_before_worker_finishes(qapp):
 
     assert calls == [_ORIGINAL]  # optimized exactly once, not twice
     assert len(results) == 1
+
+
+def test_watcher_emits_started_and_finished_on_optimize(qapp):
+    clip = FakeClipboard()
+    watcher = ClipboardWatcher(clipboard=clip, optimize_fn=lambda d: _SMALLER)
+    events = []
+    watcher.started.connect(lambda data: events.append(("started", bytes(data))))
+    watcher.finished.connect(lambda: events.append(("finished",)))
+
+    clip.setMimeData(_png_mime(_ORIGINAL))
+    watcher.wait_for_done(5000)
+    qapp.processEvents()
+
+    assert ("started", _ORIGINAL) in events
+    assert ("finished",) in events
+    assert events.index(("started", _ORIGINAL)) < events.index(("finished",))
+
+
+def test_watcher_emits_finished_even_when_no_gain(qapp):
+    clip = FakeClipboard()
+    watcher = ClipboardWatcher(clipboard=clip, optimize_fn=lambda d: None)  # no gain
+    finished = []
+    watcher.finished.connect(lambda: finished.append(1))
+
+    clip.setMimeData(_png_mime(_ORIGINAL))
+    watcher.wait_for_done(5000)
+    qapp.processEvents()
+
+    assert finished == [1]  # finished fires even though nothing was optimized
