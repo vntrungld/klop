@@ -41,6 +41,7 @@ def build_daemon(app, *, engine=None, backend=None, clipboard=None, overlay=None
 
     router = ResultRouter(tray, overlay, notifier)
     queue.job_done.connect(router.on_job_done)
+    queue.job_started.connect(router.on_job_started)
 
     watcher = None
     if config.clipboard_watch:
@@ -72,6 +73,10 @@ def build_daemon(app, *, engine=None, backend=None, clipboard=None, overlay=None
             )
 
         watcher.optimized.connect(_on_clipboard_optimized)
+        watcher.started.connect(
+            lambda png: overlay.show_pending("Clipboard image", png)
+        )
+        watcher.finished.connect(overlay.dismiss)
         tray.enabled_action.toggled.connect(
             lambda checked: setattr(watcher, "enabled", checked)
         )

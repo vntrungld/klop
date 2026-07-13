@@ -30,9 +30,17 @@ class FakeBackend:
 class FakeOverlay:
     def __init__(self):
         self.shown = []
+        self.pending = []
+        self.dismissed = 0
 
     def show_result(self, result):
         self.shown.append(result)
+
+    def show_pending(self, title, thumbnail_source=None):
+        self.pending.append((title, thumbnail_source))
+
+    def dismiss(self):
+        self.dismissed += 1
 
 
 def test_build_daemon_routes_file_result_to_overlay_not_notification(qapp, tmp_path):
@@ -122,3 +130,35 @@ def test_build_daemon_no_watcher_when_disabled(qapp, monkeypatch):
     monkeypatch.setattr(daemon_mod, "load_config", lambda: Config(clipboard_watch=False))
     d = build_daemon(qapp, engine=FakeEngine(), backend=FakeBackend())
     assert d.watcher is None
+
+
+def test_build_daemon_wires_job_started_to_overlay_pending(qapp, tmp_path):
+    overlay = FakeOverlay()
+    d = build_daemon(qapp, engine=FakeEngine(), backend=FakeBackend(), overlay=overlay)
+    d.queue.job_started.emit(tmp_path / "z.png")
+    qapp.processEvents()
+    assert overlay.pending and overlay.pending[0][0] == "z.png"
+
+
+def test_build_daemon_wires_clipboard_started_and_finished_to_overlay(qapp):
+    from PySide6.QtCore import QMimeData, QObject, Signal
+
+    class FakeClipboard(QObject):
+        dataChanged = Signal()
+
+        def mimeData(self):
+            return QMimeData()
+
+        def setMimeData(self, md):
+            pass
+
+    overlay = FakeOverlay()
+    d = build_daemon(
+        qapp, engine=FakeEngine(), backend=FakeBackend(),
+        clipboard=FakeClipboard(), overlay=overlay,
+    )
+    d.watcher.started.emit(b"\x89PNG\r\n\x1a\n" + b"x" * 10)
+    d.watcher.finished.emit()
+    qapp.processEvents()
+    assert overlay.pending and overlay.pending[0][0] == "Clipboard image"
+    assert overlay.dismissed == 1
