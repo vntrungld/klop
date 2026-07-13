@@ -179,3 +179,45 @@ def test_watcher_undo_restores_original(qapp):
     token = results[0].undo_token
     watcher.undo(token)
     assert bytes(clip.mimeData().data("image/png")) == _ORIGINAL
+
+
+def test_watcher_undo_store_is_bounded(qapp):
+    clip = FakeClipboard()
+    # Unique-but-smaller output per input so hashes differ and nothing dedups.
+    watcher = ClipboardWatcher(clipboard=clip, optimize_fn=lambda d: d[:20])
+    results = []
+    watcher.optimized.connect(results.append)
+
+    for i in range(20):
+        original = b"\x89PNG\r\n\x1a\n" + f"unique-{i}-".encode() + b"z" * 1000
+        clip.setMimeData(_png_mime(original))
+        watcher.wait_for_done(5000)
+        qapp.processEvents()
+
+    assert len(results) == 20  # every distinct image was optimized
+    assert len(watcher._undo_store) <= 16
+
+
+def test_watcher_dedupes_repeated_dataChanged_before_worker_finishes(qapp):
+    clip = FakeClipboard()
+    calls = []
+
+    def opt(data):
+        calls.append(data)
+        return _SMALLER
+
+    watcher = ClipboardWatcher(clipboard=clip, optimize_fn=opt)
+    results = []
+    watcher.optimized.connect(results.append)
+
+    # Simulate Klipper: set content without emitting, then emit dataChanged
+    # twice in a row before the worker has had a chance to deliver a result.
+    clip._md = _png_mime(_ORIGINAL)
+    clip.dataChanged.emit()
+    clip.dataChanged.emit()
+
+    watcher.wait_for_done(5000)
+    qapp.processEvents()
+
+    assert calls == [_ORIGINAL]  # optimized exactly once, not twice
+    assert len(results) == 1

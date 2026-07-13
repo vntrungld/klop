@@ -18,6 +18,7 @@ def build_daemon(app, *, engine=None, backend=None, clipboard=None):
     engine = engine or _build_engine()
     config = load_config()
     queue = OptimizationQueue(optimize_fn=engine.optimize, concurrency=config.concurrency)
+    app.aboutToQuit.connect(lambda: queue.wait_for_done(3000))
     backend = backend or DBusNotificationBackend()
     notifier = Notifier(backend=backend, undo_fn=engine.undo)
     tray = TrayApp(queue=queue, notifier=notifier, icon=load_tray_icon())
@@ -34,6 +35,7 @@ def build_daemon(app, *, engine=None, backend=None, clipboard=None):
             return optimize_image_bytes(png_bytes, config, capabilities)
 
         watcher = ClipboardWatcher(clipboard=clipboard, optimize_fn=_optimize)
+        app.aboutToQuit.connect(lambda: watcher.wait_for_done(3000))
 
         def _on_clipboard_optimized(result):
             tray.record_saved(result.saved_bytes)

@@ -34,7 +34,7 @@ class OptimizationQueue(QObject):
     ):
         super().__init__(parent)
         self._optimize_fn = optimize_fn
-        self._pool = QThreadPool()
+        self._pool = QThreadPool(self)
         self._pool.setMaxThreadCount(max(1, concurrency))
 
     def submit(self, paths: list[Path]) -> None:

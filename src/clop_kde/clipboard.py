@@ -54,6 +54,7 @@ def optimize_image_bytes(png_bytes, config: Config, capabilities, runner=None) -
 
 
 _SEEN_MAX = 32
+_UNDO_MAX = 16
 
 
 @dataclass
@@ -95,10 +96,10 @@ class ClipboardWatcher(QObject):
         self._clipboard = clipboard
         self._optimize_fn = optimize_fn
         self.enabled = True
-        self._pool = QThreadPool()
+        self._pool = QThreadPool(self)
         self._pool.setMaxThreadCount(1)
         self._seen: OrderedDict[str, None] = OrderedDict()
-        self._undo_store: dict[str, bytes] = {}
+        self._undo_store: OrderedDict[str, bytes] = OrderedDict()
         self._undo_counter = 0
         clipboard.dataChanged.connect(self._on_changed)
         self._result_ready.connect(self._on_result_ready)
@@ -148,6 +149,9 @@ class ClipboardWatcher(QObject):
         digest = content_hash(png)
         if digest in self._seen:
             return
+        self._remember(digest)  # mark in-flight before starting the worker so a
+        # repeated dataChanged for the same content (e.g. Klipper firing twice
+        # per copy) doesn't race a second worker into existence.
         self._pool.start(_ClipRunnable(self, png, digest))
 
     def _on_result_ready(self, original: bytes, digest: str, optimized) -> None:
@@ -158,5 +162,7 @@ class ClipboardWatcher(QObject):
         self._undo_counter += 1
         token = str(self._undo_counter)
         self._undo_store[token] = original
+        while len(self._undo_store) > _UNDO_MAX:
+            self._undo_store.popitem(last=False)
         self._set_clipboard_png(optimized)
         self.optimized.emit(ClipboardResult(len(original), len(optimized), token))
