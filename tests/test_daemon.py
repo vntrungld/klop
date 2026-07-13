@@ -27,34 +27,38 @@ class FakeBackend:
         return nid
 
 
-def test_build_daemon_wires_queue_to_tray_and_notifier(qapp, tmp_path):
+class FakeOverlay:
+    def __init__(self):
+        self.shown = []
+
+    def show_result(self, result):
+        self.shown.append(result)
+
+
+def test_build_daemon_routes_file_result_to_overlay_not_notification(qapp, tmp_path):
     engine = FakeEngine()
     backend = FakeBackend()
-    tray, queue, notifier, _watcher = build_daemon(qapp, engine=engine, backend=backend)
+    overlay = FakeOverlay()
+    d = build_daemon(qapp, engine=engine, backend=backend, overlay=overlay)
 
-    # A submitted job should flow: queue worker -> engine.optimize ->
-    # job_done -> tray total update + notifier notification.
-    queue.submit([tmp_path / "z.png"])
-    queue.wait_for_done(5000)
+    d.queue.submit([tmp_path / "z.png"])
+    d.queue.wait_for_done(5000)
     qapp.processEvents()
 
-    assert tray.saved_total() == 800  # 1000 - 200
-    assert len(backend.sent) == 1  # one OPTIMIZED notification with Undo
-    assert ("undo", "Undo") in backend.sent[0][3]
+    assert d.tray.saved_total() == 800  # 1000 - 200
+    assert len(overlay.shown) == 1  # file result surfaced as the overlay
+    assert backend.sent == []  # NO desktop notification for a file OPTIMIZED result
 
 
-def test_build_daemon_undo_action_restores_via_engine(qapp, tmp_path):
+def test_build_daemon_file_undo_via_overlay(qapp, tmp_path):
     engine = FakeEngine()
-    backend = FakeBackend()
-    tray, queue, notifier, _watcher = build_daemon(qapp, engine=engine, backend=backend)
+    d = build_daemon(qapp, engine=engine, backend=FakeBackend())  # real overlay
 
-    queue.submit([tmp_path / "z.png"])
-    queue.wait_for_done(5000)
+    d.queue.submit([tmp_path / "z.png"])
+    d.queue.wait_for_done(5000)
     qapp.processEvents()
 
-    nid = backend.sent[0][0]
-    backend.on_action(nid, "undo")
-
+    d.overlay.undo_button.click()  # the overlay received the result; Undo restores
     assert engine.undone == ["b1"]
 
 
@@ -76,15 +80,15 @@ def test_build_daemon_wires_clipboard_watcher(qapp, monkeypatch):
         def setMimeData(self, md):
             pass
 
-    tray, queue, notifier, watcher = build_daemon(
+    d = build_daemon(
         qapp, engine=engine, backend=backend, clipboard=FakeClipboard()
     )
-    assert watcher is not None
+    assert d.watcher is not None
 
     # A clipboard optimization result should update the tray total and notify.
-    watcher.optimized.emit(ClipboardResult(original_size=1000, new_size=250, undo_token="1"))
+    d.watcher.optimized.emit(ClipboardResult(original_size=1000, new_size=250, undo_token="1"))
 
-    assert tray.saved_total() == 750
+    assert d.tray.saved_total() == 750
     assert len(backend.sent) == 1
     _, summary, body, actions, _ = backend.sent[0]
     assert ("undo", "Undo") in actions
@@ -103,12 +107,12 @@ def test_build_daemon_enabled_toggle_controls_watcher(qapp):
         def setMimeData(self, md):
             pass
 
-    tray, queue, notifier, watcher = build_daemon(
+    d = build_daemon(
         qapp, engine=FakeEngine(), backend=FakeBackend(), clipboard=FakeClipboard()
     )
-    assert watcher.enabled is True
-    tray.enabled_action.setChecked(False)  # fires toggled(False)
-    assert watcher.enabled is False
+    assert d.watcher.enabled is True
+    d.tray.enabled_action.setChecked(False)  # fires toggled(False)
+    assert d.watcher.enabled is False
 
 
 def test_build_daemon_no_watcher_when_disabled(qapp, monkeypatch):
@@ -116,5 +120,5 @@ def test_build_daemon_no_watcher_when_disabled(qapp, monkeypatch):
     from clop_kde.config import Config
 
     monkeypatch.setattr(daemon_mod, "load_config", lambda: Config(clipboard_watch=False))
-    tray, queue, notifier, watcher = build_daemon(qapp, engine=FakeEngine(), backend=FakeBackend())
-    assert watcher is None
+    d = build_daemon(qapp, engine=FakeEngine(), backend=FakeBackend())
+    assert d.watcher is None

@@ -9,7 +9,6 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QMenu, QSystemTrayIcon
 
 from .config import default_config_path
 from .format import human_size
-from .job import JobResult, JobStatus
 
 _ICON_PATH = Path(__file__).parent / "assets" / "tray.svg"
 
@@ -28,20 +27,20 @@ def _default_pick_files() -> list[Path]:
 
 
 class TrayApp:
-    """System-tray front end: a menu that feeds files to the queue and shows
-    a running savings total."""
+    """System-tray front end: a menu that feeds files to the queue, toggles the
+    drop target, and shows a running savings total."""
 
     def __init__(
         self,
         queue,
-        notifier,
         *,
         icon: QIcon | None = None,
         pick_files: Callable[[], list[Path]] = _default_pick_files,
+        drop_toggle_fn: Callable[[], None] | None = None,
     ):
         self._queue = queue
-        self._notifier = notifier
         self._pick_files = pick_files
+        self._drop_toggle_fn = drop_toggle_fn
         self._enabled = True
         self._saved_total = 0
 
@@ -53,6 +52,9 @@ class TrayApp:
         self.saved_action.setEnabled(False)
 
         self._menu.addSeparator()
+
+        self.drop_action = self._menu.addAction("Show drop target")
+        self.drop_action.triggered.connect(self._on_toggle_drop)
 
         self.enabled_action = self._menu.addAction("Enabled")
         self.enabled_action.setCheckable(True)
@@ -66,13 +68,15 @@ class TrayApp:
         self._tray.setContextMenu(self._menu)
         self._tray.setToolTip("Clop-KDE")
 
-        queue.job_done.connect(self._on_job_done)
-
     def show(self) -> None:
         self._tray.show()
 
     def saved_total(self) -> int:
         return self._saved_total
+
+    def record_saved(self, saved_bytes: int) -> None:
+        self._saved_total += saved_bytes
+        self.saved_action.setText(f"Saved: {human_size(self._saved_total)}")
 
     def _on_optimize(self, _checked: bool = False) -> None:
         if not self._enabled:
@@ -81,18 +85,13 @@ class TrayApp:
         if paths:
             self._queue.submit(paths)
 
+    def _on_toggle_drop(self, _checked: bool = False) -> None:
+        if self._drop_toggle_fn is not None:
+            self._drop_toggle_fn()
+
     def _on_enabled_toggled(self, checked: bool) -> None:
         self._enabled = checked
         self.optimize_action.setEnabled(checked)
-
-    def record_saved(self, saved_bytes: int) -> None:
-        self._saved_total += saved_bytes
-        self.saved_action.setText(f"Saved: {human_size(self._saved_total)}")
-
-    def _on_job_done(self, result: JobResult) -> None:
-        if result.status == JobStatus.OPTIMIZED:
-            self.record_saved(result.saved_bytes)
-        self._notifier.notify_result(result)
 
     def _on_open_config(self, _checked: bool = False) -> None:
         path = default_config_path()
