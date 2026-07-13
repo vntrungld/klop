@@ -38,6 +38,17 @@ def test_undo_button_invokes_undo_and_hides(qapp, tmp_path):
     assert not overlay.isVisible()
 
 
+def test_undo_button_double_click_only_undoes_once(qapp, tmp_path):
+    p = tmp_path / "photo.png"
+    _write_png(p)
+    undone = []
+    overlay = ResultOverlay(undo_fn=lambda bid: undone.append(bid))
+    overlay.show_result(_result(p, 1000, 400, backup_id="B7"))
+    overlay.undo_button.click()
+    overlay.undo_button.click()
+    assert undone == ["B7"]
+
+
 def test_open_button_calls_open_fn(qapp, tmp_path):
     p = tmp_path / "photo.png"
     _write_png(p)

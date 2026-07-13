@@ -129,8 +129,13 @@ class ResultOverlay(QWidget):
         )
 
     def _on_undo(self) -> None:
-        if self._undo_fn is not None and self._backup_id is not None:
-            self._undo_fn(self._backup_id)
+        backup_id = self._backup_id
+        self._backup_id = None
+        if backup_id is None:
+            self.dismiss()
+            return
+        if self._undo_fn is not None:
+            self._undo_fn(backup_id)
         self.dismiss()
 
     def _on_open(self) -> None:
@@ -165,5 +170,6 @@ class ResultOverlay(QWidget):
             drag = QDrag(self)
             drag.setMimeData(_drag_mime(self._path))
             self._drag_start = None
+            self._timer.stop()
             drag.exec(Qt.DropAction.CopyAction)
         super().mouseMoveEvent(event)
