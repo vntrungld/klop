@@ -49,10 +49,15 @@ def test_prune_by_age(tmp_path):
     assert not (tmp_path / "backups" / bid).exists()
 
 
-def test_prune_by_size_keeps_newest(tmp_path):
+def test_prune_by_size_keeps_newest(tmp_path, monkeypatch):
     store = BackupStore(tmp_path / "backups")
     ids = []
-    for i in range(3):
+    # Give each backup a distinct, increasing "created" timestamp by
+    # monkeypatching time.time, so eviction order is genuinely validated
+    # as chronological oldest-first (not an accident of sha1 digest order).
+    fake_times = [1_000_000.0, 2_000_000.0, 3_000_000.0]
+    for i, fake_time in enumerate(fake_times):
+        monkeypatch.setattr("clop_kde.backup.time.time", lambda ft=fake_time: ft)
         f = tmp_path / f"f{i}.bin"
         f.write_bytes(b"Z" * 1000)
         ids.append(store.backup(f))
@@ -62,3 +67,28 @@ def test_prune_by_size_keeps_newest(tmp_path):
     assert removed == 2
     assert (tmp_path / "backups" / ids[-1]).exists()
     assert not (tmp_path / "backups" / ids[0]).exists()
+    assert not (tmp_path / "backups" / ids[1]).exists()
+
+
+def test_backup_same_path_twice_does_not_clobber(tmp_path):
+    """Two backups of the SAME path in immediate succession must land in
+    distinct slots, each preserving its own bytes (regression test for the
+    same-millisecond backup_id collision bug)."""
+    original = tmp_path / "photo.png"
+    store = BackupStore(tmp_path / "backups")
+
+    original.write_bytes(b"V1")
+    id1 = store.backup(original)
+
+    original.write_bytes(b"V2")
+    id2 = store.backup(original)
+
+    assert id1 != id2
+    assert (tmp_path / "backups" / id1).exists()
+    assert (tmp_path / "backups" / id2).exists()
+
+    restored1 = store.restore(id1)
+    assert restored1.read_bytes() == b"V1"
+
+    restored2 = store.restore(id2)
+    assert restored2.read_bytes() == b"V2"

@@ -17,13 +17,24 @@ class BackupStore:
     def _new_id(self, original: Path) -> str:
         ts_ms = int(time.time() * 1000)
         digest = hashlib.sha1(str(original).encode()).hexdigest()[:8]
-        return f"{ts_ms:015d}-{digest}"
+        base = f"{ts_ms:015d}-{digest}"
+        # Guarantee a free slot: if this exact id already exists (e.g. two
+        # backups of the same path within the same millisecond), append an
+        # incrementing numeric suffix until we find an unused slot name.
+        # This preserves the timestamp prefix (so ids still sort oldest
+        # first) while never reusing/overwriting an existing backup slot.
+        candidate = base
+        suffix = 0
+        while (self.root / candidate).exists():
+            suffix += 1
+            candidate = f"{base}-{suffix:02d}"
+        return candidate
 
     def backup(self, path: Path) -> str:
         path = Path(path)
         backup_id = self._new_id(path)
         slot = self.root / backup_id
-        slot.mkdir(parents=True, exist_ok=True)
+        slot.mkdir(parents=True)
         shutil.copy2(path, slot / path.name)
         meta = {
             "original_path": str(path),
