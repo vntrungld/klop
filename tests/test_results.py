@@ -15,9 +15,17 @@ class FakeTray:
 class FakeOverlay:
     def __init__(self):
         self.shown = []
+        self.pending = []
+        self.dismissed = 0
 
     def show_result(self, result):
         self.shown.append(result)
+
+    def show_pending(self, title, thumbnail_source=None):
+        self.pending.append((title, thumbnail_source))
+
+    def dismiss(self):
+        self.dismissed += 1
 
 
 class FakeNotifier:
@@ -38,21 +46,30 @@ def test_optimized_routes_to_overlay_and_total_not_notifier():
     assert tray.saved == [600]
     assert len(overlay.shown) == 1
     assert notifier.results == []
+    assert overlay.dismissed == 0
 
 
-def test_error_routes_to_notifier_not_overlay():
+def test_on_job_started_shows_pending(tmp_path):
+    tray, overlay, notifier = FakeTray(), FakeOverlay(), FakeNotifier()
+    p = tmp_path / "photo.png"
+    ResultRouter(tray, overlay, notifier).on_job_started(p)
+    assert overlay.pending == [("photo.png", p)]
+
+
+def test_error_notifies_and_dismisses_pending():
     tray, overlay, notifier = FakeTray(), FakeOverlay(), FakeNotifier()
     result = JobResult(JobStatus.ERROR, Path("/tmp/a.png"), 0, 0, message="disk full")
     ResultRouter(tray, overlay, notifier).on_job_done(result)
     assert notifier.results == [result]
-    assert overlay.shown == []
-    assert tray.saved == []
+    assert overlay.shown == []  # no result card
+    assert overlay.dismissed == 1  # pending card cleared
 
 
-def test_unchanged_and_skipped_are_silent():
+def test_unchanged_and_skipped_dismiss_pending_silently():
     for status in (JobStatus.UNCHANGED, JobStatus.SKIPPED):
         tray, overlay, notifier = FakeTray(), FakeOverlay(), FakeNotifier()
         ResultRouter(tray, overlay, notifier).on_job_done(
             JobResult(status, Path("/tmp/a.png"), 100, 100)
         )
         assert tray.saved == [] and overlay.shown == [] and notifier.results == []
+        assert overlay.dismissed == 1  # pending card cleared, nothing else
