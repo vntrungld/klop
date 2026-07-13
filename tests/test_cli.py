@@ -1,8 +1,12 @@
 import shutil
+from pathlib import Path
 
 import pytest
 
+from clop_kde.backup import BackupStore
 from clop_kde.cli import _human, main
+from clop_kde.config import Config
+from clop_kde.engine import Engine
 
 
 def test_human_bytes():
@@ -68,11 +72,28 @@ def test_undo_restores(tmp_path, capsys, monkeypatch):
     assert f.read_bytes() == b"ORIGINAL"
 
 
-@pytest.mark.skipif(not shutil.which("pngquant"), reason="pngquant not installed")
 def test_optimize_reports_optimized(tmp_path, capsys, monkeypatch, sample_png):
+    # Force the OPTIMIZED branch deterministically instead of relying on
+    # pngquant's actual behavior (on this machine pngquant reports the
+    # sample PNG as UNCHANGED, which left this branch uncovered). Inject a
+    # fake engine with a fake runner that always writes a smaller file.
     monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+
     target = tmp_path / "real.png"
     target.write_bytes(sample_png.read_bytes())
+
+    def fake_runner(cmd, stdout_path):
+        out = Path(cmd[cmd.index("--output") + 1])
+        out.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 10)
+        return 0
+
+    engine = Engine(
+        config=Config(),
+        backup_store=BackupStore(tmp_path / "backups"),
+        capabilities={"pngquant": "/usr/bin/pngquant"},
+        runner=fake_runner,
+    )
+    monkeypatch.setattr("clop_kde.cli._build_engine", lambda: engine)
 
     rc = main(["optimize", str(target)])
     out = capsys.readouterr().out
@@ -81,13 +102,9 @@ def test_optimize_reports_optimized(tmp_path, capsys, monkeypatch, sample_png):
     optimized_line = next(
         (line for line in out.splitlines() if line.startswith("optimized ")), None
     )
-    if optimized_line is not None:
-        assert "real.png" in optimized_line
-        assert "saved" in optimized_line
-        assert "0.0KB" not in optimized_line
-        assert "0.0MB" not in optimized_line
-    else:
-        # pngquant may report the sample as already optimal; fall back to a
-        # minimal sanity check that no size token is corrupted by the bug.
-        assert "0.0KB" not in out
-        assert "0.0MB" not in out
+    assert optimized_line is not None
+    assert "real.png" in optimized_line
+    assert "saved" in optimized_line
+    assert "KB" in optimized_line
+    assert "0.0KB" not in optimized_line
+    assert "0.0MB" not in optimized_line
