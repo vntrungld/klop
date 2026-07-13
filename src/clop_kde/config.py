@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -30,7 +30,7 @@ def load_config(path: Path | None = None) -> Config:
         path = default_config_path()
     try:
         raw = tomllib.loads(Path(path).read_text())
-    except (FileNotFoundError, OSError):
+    except OSError:
         return Config()
 
     kwargs = {}

@@ -62,3 +62,8 @@ def select_optimizer(
         if caps.get(opt.tool) is not None:
             return opt
     return None
+
+
+def expected_tools(media_type: MediaType) -> list[str]:
+    """Tool names registered for a media type, in preference order."""
+    return [opt.tool for opt in _REGISTRY.get(media_type, [])]

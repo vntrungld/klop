@@ -59,6 +59,10 @@ def _cmd_optimize(args) -> int:
                 f"{_human(result.original_size)} -> {_human(result.new_size)} "
                 f"(saved {_human(result.saved_bytes)}, undo id {result.backup_id})"
             )
+        elif result.status == JobStatus.ERROR:
+            print(f"error {path.name}: {result.message}", file=sys.stderr)
+            exit_code = 1
+            continue
         else:
             print(f"{result.status.value} {path.name}: {result.message}")
     return exit_code
