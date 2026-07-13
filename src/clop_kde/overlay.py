@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -60,6 +61,9 @@ class ResultOverlay(QWidget):
         self.thumb_label.setFixedSize(_THUMB, _THUMB)
         self.title_label = QLabel()
         self.savings_label = QLabel()
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)  # indeterminate / busy
+        self.progress_bar.hide()
 
         self.undo_button = QPushButton("Undo")
         self.open_button = QPushButton("Open")
@@ -74,6 +78,7 @@ class ResultOverlay(QWidget):
         text_col = QVBoxLayout()
         text_col.addWidget(self.title_label)
         text_col.addWidget(self.savings_label)
+        text_col.addWidget(self.progress_bar)
         text_col.addLayout(self.button_row)
 
         root = QHBoxLayout(self)
@@ -84,10 +89,12 @@ class ResultOverlay(QWidget):
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.dismiss)
 
-    def show_result(self, result: JobResult) -> None:
-        self._path = Path(result.path)
-        self._backup_id = result.backup_id
-        pixmap = QPixmap(str(self._path))
+    def _set_thumbnail(self, source) -> None:
+        pixmap = QPixmap()
+        if isinstance(source, (str, Path)):
+            pixmap = QPixmap(str(source))
+        elif isinstance(source, (bytes, bytearray)):
+            pixmap.loadFromData(bytes(source))
         if pixmap.isNull():
             self.thumb_label.setPixmap(
                 QIcon.fromTheme("image-x-generic").pixmap(_THUMB, _THUMB)
@@ -101,12 +108,34 @@ class ResultOverlay(QWidget):
                     Qt.TransformationMode.SmoothTransformation,
                 )
             )
+
+    def show_pending(self, title: str, thumbnail_source=None) -> None:
+        self._path = None
+        self._backup_id = None
+        self._set_thumbnail(thumbnail_source)
+        self.title_label.setText(f"Optimizing {title}…")
+        self.savings_label.clear()
+        self.progress_bar.show()
+        self.undo_button.hide()
+        self.open_button.hide()
+        self._timer.stop()  # a pending card stays until the result replaces it
+        self._reposition()
+        self.show()
+        self.raise_()
+
+    def show_result(self, result: JobResult) -> None:
+        self._path = Path(result.path)
+        self._backup_id = result.backup_id
+        self._set_thumbnail(self._path)
         self.title_label.setText(self._path.name)
         self.savings_label.setText(
             f"{human_size(result.original_size)} → "
             f"{human_size(result.new_size)} "
             f"(-{percent_saved(result.original_size, result.new_size)}%)"
         )
+        self.progress_bar.hide()
+        self.undo_button.show()
+        self.open_button.show()
         self._reposition()
         self.show()
         self.raise_()

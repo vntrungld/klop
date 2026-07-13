@@ -83,3 +83,36 @@ def test_auto_dismiss_timer_hides(qapp, tmp_path):
     assert overlay.isVisible()
     overlay._timer.timeout.emit()  # simulate the dismiss timer firing
     assert not overlay.isVisible()
+
+
+def test_show_pending_shows_progress_and_hides_buttons(qapp):
+    overlay = ResultOverlay()
+    overlay.show_pending("report.png")
+    assert "Optimizing" in overlay.title_label.text()
+    assert "report.png" in overlay.title_label.text()
+    assert overlay.progress_bar.isVisible()
+    assert overlay.progress_bar.minimum() == 0 and overlay.progress_bar.maximum() == 0
+    assert not overlay.undo_button.isVisible()
+    assert not overlay.open_button.isVisible()
+    assert not overlay._timer.isActive()  # a pending card must not auto-dismiss
+
+
+def test_show_result_after_pending_restores_buttons_and_hides_progress(qapp, tmp_path):
+    p = tmp_path / "photo.png"
+    _write_png(p)
+    overlay = ResultOverlay()
+    overlay.show_pending("photo.png")
+    overlay.show_result(_result(p))
+    assert not overlay.progress_bar.isVisible()
+    assert overlay.undo_button.isVisible()
+    assert overlay.open_button.isVisible()
+    assert "60%" in overlay.savings_label.text()
+
+
+def test_show_pending_with_png_bytes_thumbnail(qapp, tmp_path):
+    p = tmp_path / "photo.png"
+    _write_png(p)
+    data = p.read_bytes()
+    overlay = ResultOverlay()
+    overlay.show_pending("Clipboard image", data)  # bytes source
+    assert not overlay.thumb_label.pixmap().isNull()
