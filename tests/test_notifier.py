@@ -103,10 +103,20 @@ def test_error_sends_warning_without_action():
     assert "disk full" in body
 
 
+def _notifications_daemon_present(bus):
+    from PySide6.QtDBus import QDBusInterface
+
+    dbus = QDBusInterface(
+        "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", bus
+    )
+    reply = dbus.call("NameHasOwner", "org.freedesktop.Notifications")
+    args = reply.arguments()
+    return bool(args[0]) if args else False
+
+
 def test_real_dbus_backend_send_does_not_raise_with_no_daemon_on_bus(qapp):
-    # Headless test env: there is no notifications daemon on the session bus.
-    # send() must degrade gracefully (return an int, never raise) instead of
-    # propagating a TypeError/other exception from the D-Bus call.
+    # send() must never raise (TypeError/other exception) regardless of
+    # whether a notifications daemon is present on the bus.
     backend = DBusNotificationBackend(app_name="Clop-KDE-Test")
 
     nid = backend.send("photo.jpg", "60% smaller", [("undo", "Undo")], "")
@@ -118,3 +128,33 @@ def test_real_dbus_backend_send_with_empty_actions_does_not_raise(qapp):
 
     nid = backend.send("a.png", "Optimization failed: disk full", [], "")
     assert isinstance(nid, int)
+
+
+def test_real_dbus_backend_send_creates_notification_on_real_daemon(qapp):
+    # This is the load-bearing regression guard: on a machine with a real
+    # notifications daemon (as this one has), send() must produce an
+    # actual notification and return the daemon's nonzero id -- proving
+    # the outgoing D-Bus call matches Notify's real signature
+    # (susssasa{sv}i). A silently-swallowed signature mismatch (e.g.
+    # replaces_id marshaled as int32 instead of uint32, or actions
+    # marshaled as "av" instead of "as") would make the daemon reject the
+    # call with UnknownMethod and this would regress to id == 0.
+    backend = DBusNotificationBackend(app_name="Clop-KDE-Test")
+    bus = QDBusConnectionForTest()
+
+    nid = backend.send("clop-kde test", "hello", [("undo", "Undo")], "")
+
+    if _notifications_daemon_present(bus.connection):
+        assert nid > 0
+    else:
+        assert nid == 0
+
+
+class QDBusConnectionForTest:
+    """Small helper so the daemon-presence check reuses the same session
+    bus connection type the backend itself talks to."""
+
+    def __init__(self):
+        from PySide6.QtDBus import QDBusConnection
+
+        self.connection = QDBusConnection.sessionBus()

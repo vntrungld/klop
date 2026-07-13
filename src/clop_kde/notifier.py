@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import re
+import subprocess
+import sys
 from typing import Callable, Protocol
 
 from PySide6.QtCore import SLOT, QObject, Slot
-from PySide6.QtDBus import QDBusConnection, QDBusMessage
+from PySide6.QtDBus import QDBusConnection
 
 from .format import human_size, percent_saved
 from .job import JobResult, JobStatus
@@ -95,26 +98,64 @@ class DBusNotificationBackend(QObject):
             SLOT("_notification_closed(uint,uint)"),
         )
 
+    _NOTIFY_REPLY_RE = re.compile(r"uint32\s+(\d+)")
+
+    @staticmethod
+    def _gvariant_string_literal(value: str) -> str:
+        """Escape a Python str as a double-quoted GVariant text-format
+        string literal (backslash and double-quote are the two characters
+        GVariant's parser treats specially inside a quoted string)."""
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+
     def send(self, summary, body, actions, icon):
         flat: list[str] = []
         for key, label in actions:
             flat.extend([key, label])
-        msg = QDBusMessage.createMethodCall(
-            self._SERVICE, self._PATH, self._SERVICE, "Notify"
-        )
-        # replaces_id (arg 2) is spec'd as uint32 ("u"); a bare Python 0
-        # marshals as int32 via QDBusMessage.setArguments in PySide6, which
-        # KDE/GNOME notification daemons accept leniently. Forcing a true
-        # uint32 scalar isn't practical from Python here (QVariant isn't
-        # exposed and QDBusArgument has no typed scalar append), so we leave
-        # it as-is per the freedesktop spec's lenient real-world servers.
-        msg.setArguments([self._app_name, 0, icon, summary, body, flat, {}, -1])
+        # PySide6's QtDBus marshals a bare Python int as D-Bus int32 and a
+        # list as "av" (QDBusMessage.setArguments), and even
+        # QDBusInterface.callWithArgumentList — despite introspecting the
+        # remote object — does not coerce the replaces_id scalar to uint32.
+        # The resulting outgoing signature ("si...") mismatches
+        # freedesktop's Notify ("su..."; replaces_id is uint32, actions is
+        # "as"), and real daemons (e.g. KDE Plasma's) reject the call with
+        # UnknownMethod. `gdbus call` parses each argument as a GVariant
+        # text-format literal against the introspected method signature,
+        # so it marshals correctly; shell out to it instead.
+        actions_literal = "[" + ", ".join(self._gvariant_string_literal(a) for a in flat) + "]"
+        argv = [
+            "gdbus",
+            "call",
+            "--session",
+            "-d",
+            self._SERVICE,
+            "-o",
+            self._PATH,
+            "-m",
+            f"{self._SERVICE}.Notify",
+            "--",
+            self._gvariant_string_literal(self._app_name),
+            "0",
+            self._gvariant_string_literal(icon),
+            self._gvariant_string_literal(summary),
+            self._gvariant_string_literal(body),
+            actions_literal,
+            "{}",
+            "-1",
+        ]
         try:
-            reply = self._bus.call(msg)
-            args = reply.arguments()
-            return int(args[0]) if args else 0
-        except Exception:
+            proc = subprocess.run(argv, capture_output=True, text=True, timeout=5)
+        except (OSError, subprocess.SubprocessError) as exc:
+            print(f"clop-kde: Notify failed to invoke gdbus: {exc}", file=sys.stderr)
             return 0
+        if proc.returncode != 0:
+            print(
+                f"clop-kde: Notify failed: {proc.stderr.strip() or proc.stdout.strip()}",
+                file=sys.stderr,
+            )
+            return 0
+        match = self._NOTIFY_REPLY_RE.search(proc.stdout)
+        return int(match.group(1)) if match else 0
 
     @Slot("uint", str)
     def _action_invoked(self, notification_id, action_key):
