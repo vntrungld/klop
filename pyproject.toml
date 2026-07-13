@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "clop-kde"
+version = "0.0.1"
+description = "Background media optimizer for KDE Plasma 6"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "Pillow>=10"]
+
+[project.scripts]
+clop-kde = "clop_kde.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clop_kde"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
