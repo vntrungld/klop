@@ -162,9 +162,11 @@ open-config. Desktop notification on job done. Now a real background daemon.
 `ClipboardWatcher` → temp file → engine → write result back to clipboard. Guard against
 re-optimizing our own output.
 
-**M3 — Floating overlay (QML).**
+**M3 — Floating overlay + drop target (QML).**
 Animated floating thumbnail on completion: savings + buttons for undo / open / drag-out,
 auto-dismiss timer. Add downscale (0.5×, 1–9 presets) wired to the engine's resize path.
+Includes the `DropTargetWindow` source: a small always-available window (toggled from the
+tray) that accepts dragged-in files and enqueues them — the manual drag-and-drop trigger.
 
 **M4 — Watched folders.**
 `FolderWatcher` (`QFileSystemWatcher` + debounce) on configured dirs; ignore backups/temp;
