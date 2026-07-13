@@ -96,7 +96,7 @@ available optimizer is skipped with a clear log/notification.
 
 | Media | Detected by | Primary tool | Fallback / notes |
 |---|---|---|---|
-| PNG | magic bytes / ext | `oxipng` (or `pngquant` for lossy) | skip if neither present |
+| PNG | magic bytes / ext | `pngquant` (lossy, default) | `oxipng` for lossless mode; skip if neither present |
 | JPEG | magic bytes / ext | `jpegoptim` | `--max=N` quality knob |
 | GIF | magic bytes / ext | `gifsicle -O3` | `gifski` for higher quality |
 | WebP | magic bytes / ext | `cwebp` | |
@@ -188,7 +188,7 @@ from M2/M4/M5 feeds the same M0 engine — so no rework.
 
 ## Dependencies (external CLIs, all optional/detected)
 
-`oxipng`, `pngquant`, `jpegoptim`, `gifsicle`, `gifski`, `cwebp`, `libvips` (`vips`),
+`pngquant` (default PNG), `oxipng` (lossless PNG option), `jpegoptim`, `gifsicle`, `gifski`, `cwebp`, `libvips` (`vips`),
 `ffmpeg`, `ghostscript` (`gs`). Runtime: Python 3, PySide6, KDE Plasma 6 (Qt6/KF6).
 
 ## Testing Strategy
