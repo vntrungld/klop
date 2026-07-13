@@ -15,15 +15,17 @@ class _JobRunnable(QRunnable):
         self._path = path
 
     def run(self) -> None:
+        # Emitting from the worker thread is safe; Qt marshals the signals to
+        # the receiver's (GUI) thread via queued connections.
+        self._queue.job_started.emit(self._path)
         result = self._queue._run_one(self._path)
-        # Emitting from the worker thread is safe; Qt marshals the signal to
-        # the receiver's (GUI) thread via a queued connection.
         self._queue.job_done.emit(result)
 
 
 class OptimizationQueue(QObject):
     """Runs optimization jobs off the GUI thread via a bounded QThreadPool."""
 
+    job_started = Signal(object)  # payload: source Path
     job_done = Signal(object)  # payload: JobResult
 
     def __init__(
