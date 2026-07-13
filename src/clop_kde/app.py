@@ -96,7 +96,10 @@ class TrayApp:
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("")
-        subprocess.Popen(["xdg-open", str(path)])
+        try:
+            subprocess.Popen(["xdg-open", str(path)])
+        except OSError:
+            self._tray.showMessage("Clop-KDE", f"Could not open config: {path}")
 
     def _on_quit(self, _checked: bool = False) -> None:
         QApplication.quit()

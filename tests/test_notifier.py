@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from clop_kde.job import JobResult, JobStatus
-from clop_kde.notifier import Notifier
+from clop_kde.notifier import DBusNotificationBackend, Notifier
 
 
 class FakeBackend:
@@ -101,3 +101,20 @@ def test_error_sends_warning_without_action():
     assert actions == []
     assert "a.png" in summary
     assert "disk full" in body
+
+
+def test_real_dbus_backend_send_does_not_raise_with_no_daemon_on_bus(qapp):
+    # Headless test env: there is no notifications daemon on the session bus.
+    # send() must degrade gracefully (return an int, never raise) instead of
+    # propagating a TypeError/other exception from the D-Bus call.
+    backend = DBusNotificationBackend(app_name="Clop-KDE-Test")
+
+    nid = backend.send("photo.jpg", "60% smaller", [("undo", "Undo")], "")
+    assert isinstance(nid, int)
+
+
+def test_real_dbus_backend_send_with_empty_actions_does_not_raise(qapp):
+    backend = DBusNotificationBackend(app_name="Clop-KDE-Test")
+
+    nid = backend.send("a.png", "Optimization failed: disk full", [], "")
+    assert isinstance(nid, int)

@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from clop_kde.daemon import build_daemon
 from clop_kde.job import JobResult, JobStatus
 

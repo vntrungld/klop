@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
+from clop_kde import app as app_module
 from clop_kde.app import TrayApp, load_tray_icon
 from clop_kde.job import JobResult, JobStatus
 
@@ -76,3 +77,16 @@ def test_non_optimized_job_done_does_not_change_total_but_still_notifies(qapp):
 def test_load_tray_icon_returns_a_non_null_icon(qapp):
     icon = load_tray_icon()
     assert not icon.isNull()
+
+
+def test_open_config_does_not_raise_when_xdg_open_is_missing(qapp, monkeypatch, tmp_path):
+    queue = FakeQueue()
+    tray = TrayApp(queue=queue, notifier=FakeNotifier(), pick_files=lambda: [])
+    monkeypatch.setattr(app_module, "default_config_path", lambda: tmp_path / "clop-kde.toml")
+
+    def raise_missing(*args, **kwargs):
+        raise FileNotFoundError("xdg-open not found")
+
+    monkeypatch.setattr(app_module.subprocess, "Popen", raise_missing)
+
+    tray._on_open_config()  # must not raise
