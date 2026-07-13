@@ -56,6 +56,7 @@ class ResultOverlay(QWidget):
         self._path: Path | None = None
         self._backup_id: str | None = None
         self._drag_start: QPoint | None = None
+        self._pending = False
 
         self.thumb_label = QLabel()
         self.thumb_label.setFixedSize(_THUMB, _THUMB)
@@ -122,8 +123,10 @@ class ResultOverlay(QWidget):
         self._reposition()
         self.show()
         self.raise_()
+        self._pending = True
 
     def show_result(self, result: JobResult) -> None:
+        self._pending = False
         self._path = Path(result.path)
         self._backup_id = result.backup_id
         self._set_thumbnail(self._path)
@@ -143,7 +146,14 @@ class ResultOverlay(QWidget):
 
     def dismiss(self) -> None:
         self._timer.stop()
+        self._pending = False
         self.hide()
+
+    def dismiss_if_pending(self) -> None:
+        """Dismiss only if a pending card is showing — so a clipboard job
+        finishing cannot tear down a file result card on the shared overlay."""
+        if self._pending:
+            self.dismiss()
 
     def _reposition(self) -> None:
         screen = QGuiApplication.primaryScreen()

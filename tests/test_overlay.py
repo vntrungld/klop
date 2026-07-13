@@ -116,3 +116,21 @@ def test_show_pending_with_png_bytes_thumbnail(qapp, tmp_path):
     overlay = ResultOverlay()
     overlay.show_pending("Clipboard image", data)  # bytes source
     assert not overlay.thumb_label.pixmap().isNull()
+
+
+def test_dismiss_if_pending_dismisses_a_pending_card(qapp):
+    overlay = ResultOverlay()
+    overlay.show_pending("report.png")
+    assert overlay.isVisible()
+    overlay.dismiss_if_pending()
+    assert not overlay.isVisible()
+
+
+def test_dismiss_if_pending_keeps_a_result_card(qapp, tmp_path):
+    p = tmp_path / "photo.png"
+    _write_png(p)
+    overlay = ResultOverlay()
+    overlay.show_result(_result(p))
+    assert overlay.isVisible()
+    overlay.dismiss_if_pending()
+    assert overlay.isVisible()  # a result card must survive a stray pending-only dismiss

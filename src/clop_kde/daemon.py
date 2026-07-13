@@ -73,10 +73,13 @@ def build_daemon(app, *, engine=None, backend=None, clipboard=None, overlay=None
             )
 
         watcher.optimized.connect(_on_clipboard_optimized)
+        # The overlay is shared across sources (clipboard + file jobs); guard
+        # the clipboard-driven dismiss by pending state so it can't destroy
+        # a file result card that was shown while the clipboard job ran.
         watcher.started.connect(
             lambda png: overlay.show_pending("Clipboard image", png)
         )
-        watcher.finished.connect(overlay.dismiss)
+        watcher.finished.connect(overlay.dismiss_if_pending)
         tray.enabled_action.toggled.connect(
             lambda checked: setattr(watcher, "enabled", checked)
         )

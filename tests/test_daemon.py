@@ -32,15 +32,23 @@ class FakeOverlay:
         self.shown = []
         self.pending = []
         self.dismissed = 0
+        self._pending = False
 
     def show_result(self, result):
         self.shown.append(result)
+        self._pending = False
 
     def show_pending(self, title, thumbnail_source=None):
         self.pending.append((title, thumbnail_source))
+        self._pending = True
 
     def dismiss(self):
         self.dismissed += 1
+        self._pending = False
+
+    def dismiss_if_pending(self):
+        if self._pending:
+            self.dismiss()
 
 
 def test_build_daemon_routes_file_result_to_overlay_not_notification(qapp, tmp_path):
@@ -162,3 +170,37 @@ def test_build_daemon_wires_clipboard_started_and_finished_to_overlay(qapp):
     qapp.processEvents()
     assert overlay.pending and overlay.pending[0][0] == "Clipboard image"
     assert overlay.dismissed == 1
+
+
+def test_clipboard_finished_does_not_dismiss_a_file_result_card(qapp):
+    """Regression: the shared overlay must not have a file RESULT card torn
+    down by an unrelated clipboard job's `finished` signal (whole-branch
+    review bug). Interleaving: clipboard started (pending) -> a file result
+    is shown on the same overlay -> clipboard finished must NOT dismiss it.
+    """
+    from PySide6.QtCore import QMimeData, QObject, Signal
+
+    class FakeClipboard(QObject):
+        dataChanged = Signal()
+
+        def mimeData(self):
+            return QMimeData()
+
+        def setMimeData(self, md):
+            pass
+
+    overlay = FakeOverlay()
+    d = build_daemon(
+        qapp, engine=FakeEngine(), backend=FakeBackend(),
+        clipboard=FakeClipboard(), overlay=overlay,
+    )
+    d.watcher.started.emit(b"\x89PNG\r\n\x1a\n" + b"x" * 10)  # clipboard pending
+
+    file_result = JobResult(JobStatus.OPTIMIZED, "/tmp/z.png", 1000, 200, backup_id="b1")
+    d.overlay.show_result(file_result)  # a file result card takes over the shared overlay
+
+    d.watcher.finished.emit()
+    qapp.processEvents()
+
+    assert overlay.shown == [file_result]
+    assert overlay.dismissed == 0  # clipboard finished must not dismiss the file result card
