@@ -85,10 +85,13 @@ class TrayApp:
         self._enabled = checked
         self.optimize_action.setEnabled(checked)
 
+    def record_saved(self, saved_bytes: int) -> None:
+        self._saved_total += saved_bytes
+        self.saved_action.setText(f"Saved: {human_size(self._saved_total)}")
+
     def _on_job_done(self, result: JobResult) -> None:
         if result.status == JobStatus.OPTIMIZED:
-            self._saved_total += result.saved_bytes
-            self.saved_action.setText(f"Saved: {human_size(self._saved_total)}")
+            self.record_saved(result.saved_bytes)
         self._notifier.notify_result(result)
 
     def _on_open_config(self, _checked: bool = False) -> None:

@@ -15,6 +15,7 @@ class Config:
     concurrency: int = 2
     backup_retention_days: int = 7
     backup_max_bytes: int = 500 * 1024 * 1024
+    clipboard_watch: bool = True
 
 
 def default_config_path() -> Path:

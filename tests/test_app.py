@@ -79,6 +79,18 @@ def test_load_tray_icon_returns_a_non_null_icon(qapp):
     assert not icon.isNull()
 
 
+def test_record_saved_accumulates_total_and_updates_text(qapp):
+    queue = FakeQueue()
+    tray = TrayApp(queue=queue, notifier=FakeNotifier(), pick_files=lambda: [])
+
+    tray.record_saved(5000)
+    tray.record_saved(3000)
+
+    assert tray.saved_total() == 8000
+    assert "Saved:" in tray.saved_action.text()
+    assert "7.8KB" in tray.saved_action.text()  # 8000 bytes -> 7.8KB
+
+
 def test_open_config_does_not_raise_when_xdg_open_is_missing(qapp, monkeypatch, tmp_path):
     queue = FakeQueue()
     tray = TrayApp(queue=queue, notifier=FakeNotifier(), pick_files=lambda: [])
