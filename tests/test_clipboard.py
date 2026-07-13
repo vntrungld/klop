@@ -1,8 +1,9 @@
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QByteArray, QMimeData, QObject, Signal
 
-from clop_kde.clipboard import content_hash, image_to_png_bytes, optimize_image_bytes
+from clop_kde.clipboard import ClipboardResult, ClipboardWatcher, content_hash, image_to_png_bytes, optimize_image_bytes
 from clop_kde.config import Config
 
 
@@ -72,3 +73,109 @@ def test_optimize_real_pngquant(qapp):
     result = optimize_image_bytes(png, Config(), {"pngquant": __import__("shutil").which("pngquant")})
     # Either it shrank (bytes) or it couldn't beat min_bytes_saved (None) — both are valid.
     assert result is None or len(result) < len(png)
+
+
+class FakeClipboard(QObject):
+    dataChanged = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self._md = QMimeData()
+
+    def mimeData(self):
+        return self._md
+
+    def setMimeData(self, md):
+        self._md = md
+        self.dataChanged.emit()
+
+
+def _png_mime(data: bytes) -> QMimeData:
+    md = QMimeData()
+    md.setData("image/png", QByteArray(data))
+    return md
+
+
+_ORIGINAL = b"\x89PNG\r\n\x1a\n" + b"x" * 1000
+_SMALLER = b"\x89PNG\r\n\x1a\n" + b"y" * 10
+
+
+def test_watcher_optimizes_and_writes_back(qapp):
+    clip = FakeClipboard()
+    calls = []
+
+    def opt(data):
+        calls.append(data)
+        return _SMALLER
+
+    watcher = ClipboardWatcher(clipboard=clip, optimize_fn=opt)
+    results = []
+    watcher.optimized.connect(results.append)
+
+    clip.setMimeData(_png_mime(_ORIGINAL))
+    watcher.wait_for_done(5000)
+    qapp.processEvents()
+
+    assert calls == [_ORIGINAL]  # optimized exactly once (loop-prevented on write-back)
+    assert len(results) == 1
+    assert results[0].original_size == len(_ORIGINAL)
+    assert results[0].new_size == len(_SMALLER)
+    assert bytes(clip.mimeData().data("image/png")) == _SMALLER
+
+
+def test_watcher_skips_already_seen(qapp):
+    clip = FakeClipboard()
+    calls = []
+    watcher = ClipboardWatcher(clipboard=clip, optimize_fn=lambda d: (calls.append(d), _SMALLER)[1])
+    watcher.optimized.connect(lambda r: None)
+
+    clip.setMimeData(_png_mime(_ORIGINAL))
+    watcher.wait_for_done(5000)
+    qapp.processEvents()
+    calls.clear()
+
+    clip.setMimeData(_png_mime(_ORIGINAL))  # same original again — hash already seen
+    watcher.wait_for_done(5000)
+    qapp.processEvents()
+    assert calls == []
+
+
+def test_watcher_disabled_does_not_optimize(qapp):
+    clip = FakeClipboard()
+    calls = []
+    watcher = ClipboardWatcher(clipboard=clip, optimize_fn=lambda d: (calls.append(d), _SMALLER)[1])
+    watcher.enabled = False
+
+    clip.setMimeData(_png_mime(_ORIGINAL))
+    watcher.wait_for_done(5000)
+    qapp.processEvents()
+    assert calls == []
+
+
+def test_watcher_no_change_when_optimize_returns_none(qapp):
+    clip = FakeClipboard()
+    watcher = ClipboardWatcher(clipboard=clip, optimize_fn=lambda d: None)
+    results = []
+    watcher.optimized.connect(results.append)
+
+    clip.setMimeData(_png_mime(_ORIGINAL))
+    watcher.wait_for_done(5000)
+    qapp.processEvents()
+
+    assert results == []
+    assert bytes(clip.mimeData().data("image/png")) == _ORIGINAL
+
+
+def test_watcher_undo_restores_original(qapp):
+    clip = FakeClipboard()
+    watcher = ClipboardWatcher(clipboard=clip, optimize_fn=lambda d: _SMALLER)
+    results = []
+    watcher.optimized.connect(results.append)
+
+    clip.setMimeData(_png_mime(_ORIGINAL))
+    watcher.wait_for_done(5000)
+    qapp.processEvents()
+
+    token = results[0].undo_token
+    watcher.undo(token)
+    assert bytes(clip.mimeData().data("image/png")) == _ORIGINAL
