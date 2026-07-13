@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from PIL import Image
 
@@ -25,3 +27,14 @@ def sample_jpeg(tmp_path):
             px[x, y] = (x, y, (x + y) % 256)
     img.save(p, "JPEG", quality=95)
     return p
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    # Headless Qt: use the offscreen platform plugin so widgets/tray can be
+    # constructed in CI without a display server.
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    yield app
