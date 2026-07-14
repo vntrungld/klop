@@ -210,15 +210,28 @@ def test_watcher_undo_is_single_slot(qapp):
     first_token, second_token = results[0].undo_token, results[1].undo_token
     assert first_token != second_token
 
-    # The old (superseded) token no longer restores anything.
+    # The old (superseded) token no longer restores anything: this must be a
+    # TRUE no-op, not merely "didn't restore original_one" (which a broken
+    # token check could satisfy by wrongly restoring the *current* slot).
+    optimized_before_stale_undo = bytes(clip.mimeData().data("image/png"))
     watcher.undo(first_token)  # no-op, must not raise
-    assert bytes(clip.mimeData().data("image/png")) != original_one
+    assert bytes(clip.mimeData().data("image/png")) == optimized_before_stale_undo
+    # The current (second) slot must remain intact — untouched by the stale call.
+    assert watcher._undo_token == second_token
+    assert watcher._undo_original is not None
 
-    # The current token restores; using it twice is a no-op the second time.
+    # The current token restores the correct original and clears the slot
+    # (single-use), so a repeat call with the same token is a no-op.
     watcher.undo(second_token)
     assert bytes(clip.mimeData().data("image/png")) == original_two
+    assert watcher._undo_token is None
+    assert watcher._undo_original is None
+
+    after_first_restore = bytes(clip.mimeData().data("image/png"))
     watcher.undo(second_token)  # already used, no-op
-    assert bytes(clip.mimeData().data("image/png")) == original_two
+    assert bytes(clip.mimeData().data("image/png")) == after_first_restore
+    assert watcher._undo_token is None
+    assert watcher._undo_original is None
 
 
 def test_watcher_dedupes_repeated_dataChanged_before_worker_finishes(qapp):
