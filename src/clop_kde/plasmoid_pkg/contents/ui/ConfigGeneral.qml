@@ -61,8 +61,14 @@ Kirigami.FormLayout {
         color: Kirigami.Theme.negativeTextColor
     }
 
+    function shquote(s) {
+        return "'" + String(s).replace(/'/g, "'\\''") + "'";
+    }
+
     // Plasma calls this when the user hits Apply/OK.
     function saveConfig() {
+        if (!page.loaded)
+            return;
         var assigns = [
             "png_lossy=" + (pngLossy.checked ? "true" : "false"),
             "pngquant_quality=" + pngMin.value + "," + pngMax.value,
@@ -71,13 +77,13 @@ Kirigami.FormLayout {
             "concurrency=" + concurrency.value,
             "clipboard_watch=" + (clipboardWatch.checked ? "true" : "false")
         ].join(" ");
-        exec.run(Backend.CLOP_BIN + " config set " + assigns, function (code, out, err) {
+        exec.run(shquote(Backend.CLOP_BIN) + " config set " + assigns, function (code, out, err) {
             errorLabel.text = (code !== 0) ? (err || "config set failed").trim() : "";
         });
     }
 
     Component.onCompleted: {
-        exec.run(Backend.CLOP_BIN + " config get --json", function (code, out, err) {
+        exec.run(shquote(Backend.CLOP_BIN) + " config get --json", function (code, out, err) {
             if (code !== 0) return;
             var c;
             try { c = JSON.parse(out); } catch (e) { return; }
