@@ -197,6 +197,17 @@ def _cmd_config_set(args) -> int:
     return 0
 
 
+def _cmd_install_plasmoid(_args) -> int:
+    from .plasmoid import install_plasmoid
+
+    dest = install_plasmoid()
+    print(f"installed Klop plasmoid: {dest}")
+    print("Add the 'Klop' widget to a panel (right-click a panel → Add Widgets).")
+    print("If it does not appear, restart plasmashell:")
+    print("  kquitapp6 plasmashell && kstart plasmashell")
+    return 0
+
+
 def _cmd_daemon(_args) -> int:
     from .daemon import run_daemon  # lazy: keeps Qt out of the headless CLI import path
 
@@ -229,6 +240,11 @@ def main(argv: list[str] | None = None) -> int:
         "install-dolphin", help="install the Dolphin right-click 'Optimize with Clop' menu"
     )
     p_install.set_defaults(func=_cmd_install_dolphin)
+
+    p_plasmoid = sub.add_parser(
+        "install-plasmoid", help="install the Klop Plasma panel widget"
+    )
+    p_plasmoid.set_defaults(func=_cmd_install_plasmoid)
 
     p_config = sub.add_parser("config", help="get or set optimizer settings")
     csub = p_config.add_subparsers(dest="config_cmd", required=True)
