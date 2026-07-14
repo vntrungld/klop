@@ -149,8 +149,6 @@ def test_optimize_error_result_prints_to_stderr_and_continues(
 
 
 def test_optimize_records_file_history(tmp_path, monkeypatch):
-    import shutil as _shutil
-
     from clop_kde.cli import main
 
     hist = tmp_path / "history.jsonl"

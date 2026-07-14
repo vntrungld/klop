@@ -35,6 +35,15 @@ def test_ids_are_unique(tmp_path):
     assert len(ids) == 5
 
 
+def test_ids_unique_across_instances(tmp_path):
+    # Two separate HistoryStore instances (mirrors CLI + daemon as distinct
+    # processes) must not collide on their first record.
+    p = tmp_path / "h.jsonl"
+    a = HistoryStore(p).record("file", "a.png", "/tmp/a.png", 10, 5, backup_id="b1")
+    b = HistoryStore(p).record("file", "b.png", "/tmp/b.png", 10, 5, backup_id="b2")
+    assert a.id != b.id
+
+
 def test_prune_caps_at_max(tmp_path):
     from clop_kde.history import _MAX
 

@@ -93,7 +93,7 @@ def _cmd_history(args) -> int:
         print("no optimizations yet")
         return 0
     for e in entries:
-        mark = "↩" if e.undoable else " "  # ↩ marks an undoable row
+        mark = "*" if e.undoable else " "  # * marks an undoable row
         line = (
             f"{mark} {e.kind:9} {e.name:24.24} "
             f"{human_size(e.original_size)} -> {human_size(e.new_size)} "

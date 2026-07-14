@@ -5,6 +5,7 @@ import os
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
+from uuid import uuid4
 
 _MAX = 200
 
@@ -70,15 +71,13 @@ class HistoryStore:
 
     def __init__(self, path: Path | None = None):
         self._path = Path(path) if path is not None else _default_history_file()
-        self._counter = 0
 
     def record(
         self, kind, name, path, original_size, new_size, backup_id=None
     ) -> HistoryEntry:
         ts = time.time()
-        self._counter += 1
         entry = HistoryEntry(
-            id=f"{int(ts * 1e9)}-{self._counter}",
+            id=f"{int(ts * 1e9)}-{uuid4().hex[:8]}",
             kind=kind,
             name=name,
             path=path,
