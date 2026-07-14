@@ -10,9 +10,17 @@ from .backup import BackupStore
 from .capabilities import KNOWN_TOOLS, detect_capabilities
 from .config import load_config
 from .engine import Engine
-from .format import human_size
+from .format import human_size, percent_saved
 from .history import HistoryStore
-from .job import JobStatus, OptimizationJob
+from .job import JobResult, JobStatus, OptimizationJob
+from .notify import send_notification
+
+
+_ICON_PATH = Path(__file__).parent / "assets" / "tray.svg"
+
+
+def _notify_icon() -> str:
+    return str(_ICON_PATH) if _ICON_PATH.exists() else "image-x-generic"
 
 
 def _backup_root() -> Path:
@@ -38,15 +46,50 @@ def _cmd_caps(_args) -> int:
     return 0
 
 
+def _optimize_summary(
+    optimized: list[JobResult], others: int, errors: int
+) -> tuple[str, str] | None:
+    """Build the (summary, body) desktop-notification text for a run, or None
+    when there is nothing worth announcing."""
+    n = len(optimized)
+    if n == 1 and others == 0 and errors == 0:
+        r = optimized[0]
+        pct = percent_saved(r.original_size, r.new_size)
+        return r.path.name, (
+            f"{human_size(r.original_size)} → {human_size(r.new_size)} (-{pct}%)"
+        )
+    if n >= 1:
+        saved = sum(r.saved_bytes for r in optimized)
+        pct = percent_saved(
+            sum(r.original_size for r in optimized),
+            sum(r.new_size for r in optimized),
+        )
+        body = f"Optimized {n} files · saved {human_size(saved)} (-{pct}%)"
+        if others:
+            body += f" · {others} unchanged"
+        if errors:
+            body += f" · {errors} failed"
+        return "Clop-KDE", body
+    if errors:
+        return "Clop-KDE", f"{errors} file(s) failed to optimize"
+    if others:
+        return "Clop-KDE", f"Nothing to optimize ({others} file(s) unchanged)"
+    return None
+
+
 def _cmd_optimize(args) -> int:
     engine = _build_engine()
     history = HistoryStore()
     exit_code = 0
+    optimized: list[JobResult] = []
+    others = 0
+    errors = 0
     for raw in args.files:
         path = Path(raw)
         if not path.exists():
             print(f"error: file not found: {path}", file=sys.stderr)
             exit_code = 1
+            errors += 1
             continue
         result = engine.optimize(OptimizationJob(source_path=path))
         if result.status == JobStatus.OPTIMIZED:
@@ -63,12 +106,23 @@ def _cmd_optimize(args) -> int:
                 result.new_size,
                 result.backup_id,
             )
+            optimized.append(result)
         elif result.status == JobStatus.ERROR:
             print(f"error {path.name}: {result.message}", file=sys.stderr)
             exit_code = 1
+            errors += 1
             continue
         else:
             print(f"{result.status.value} {path.name}: {result.message}")
+            others += 1
+
+    # Dolphin's service menu runs us with no terminal, so stdout goes nowhere;
+    # surface a desktop notification there. In an interactive shell the printed
+    # output is enough, so stay quiet.
+    if not sys.stdout.isatty():
+        summary = _optimize_summary(optimized, others, errors)
+        if summary is not None:
+            send_notification(summary[0], summary[1], icon=_notify_icon())
     return exit_code
 
 
@@ -105,6 +159,16 @@ def _cmd_history(args) -> int:
     return 0
 
 
+def _cmd_install_dolphin(_args) -> int:
+    from .servicemenu import install
+
+    dest = install()
+    print(f"installed Dolphin service menu: {dest}")
+    print("Right-click an image in Dolphin → 'Optimize with Clop'.")
+    print("If it doesn't appear yet, restart Dolphin (or run kbuildsycoca6).")
+    return 0
+
+
 def _cmd_daemon(_args) -> int:
     from .daemon import run_daemon  # lazy: keeps Qt out of the headless CLI import path
 
@@ -132,6 +196,11 @@ def main(argv: list[str] | None = None) -> int:
 
     p_daemon = sub.add_parser("daemon", help="run the system-tray daemon")
     p_daemon.set_defaults(func=_cmd_daemon)
+
+    p_install = sub.add_parser(
+        "install-dolphin", help="install the Dolphin right-click 'Optimize with Clop' menu"
+    )
+    p_install.set_defaults(func=_cmd_install_dolphin)
 
     args = parser.parse_args(argv)
     return args.func(args)

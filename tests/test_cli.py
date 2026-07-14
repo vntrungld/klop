@@ -39,6 +39,64 @@ def test_optimize_missing_file_errors(tmp_path, capsys):
     assert "not found" in capsys.readouterr().err.lower()
 
 
+def test_optimize_notifies_when_launched_without_a_terminal(tmp_path, monkeypatch):
+    # Dolphin runs the service menu with no controlling terminal, so stdout is
+    # swallowed; the CLI must surface a desktop notification instead.
+    import sys
+
+    import clop_kde.cli as cli_mod
+
+    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setattr(shutil, "which", lambda name: None)  # no tools -> skipped
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)  # not a terminal
+    sent = []
+    monkeypatch.setattr(
+        cli_mod, "send_notification", lambda summary, body, **kw: sent.append((summary, body))
+    )
+
+    f = tmp_path / "a.png"
+    f.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 100)
+    rc = main(["optimize", str(f)])
+
+    assert rc == 0
+    assert len(sent) == 1  # exactly one summary notification
+
+
+def test_optimize_does_not_notify_in_a_terminal(tmp_path, monkeypatch):
+    import sys
+
+    import clop_kde.cli as cli_mod
+
+    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)  # interactive terminal
+    sent = []
+    monkeypatch.setattr(
+        cli_mod, "send_notification", lambda *a, **k: sent.append(1)
+    )
+
+    f = tmp_path / "a.png"
+    f.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 100)
+    main(["optimize", str(f)])
+
+    assert sent == []  # terminal user already sees stdout; no notification
+
+
+def test_install_dolphin_writes_service_menu(tmp_path, capsys, monkeypatch):
+    menus = tmp_path / "kio" / "servicemenus"
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setattr(shutil, "which", lambda name: "/opt/bin/clop-kde")
+
+    rc = main(["install-dolphin"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    installed = menus / "clop-kde-optimize.desktop"
+    assert installed.exists()
+    assert 'Exec="/opt/bin/clop-kde" optimize %F' in installed.read_text()
+    assert str(installed) in out
+
+
 def test_undo_restores(tmp_path, capsys, monkeypatch):
     from clop_kde.backup import BackupStore
 
