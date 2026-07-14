@@ -181,21 +181,57 @@ def test_watcher_undo_restores_original(qapp):
     assert bytes(clip.mimeData().data("image/png")) == _ORIGINAL
 
 
-def test_watcher_undo_store_is_bounded(qapp):
+def test_watcher_undo_is_single_slot(qapp):
+    # Only the most-recent clipboard optimization is undoable; a new
+    # optimization supersedes the previous token.
     clip = FakeClipboard()
-    # Unique-but-smaller output per input so hashes differ and nothing dedups.
-    watcher = ClipboardWatcher(clipboard=clip, optimize_fn=lambda d: d[:20])
+    calls = {"n": 0}
+
+    def optimize(png):
+        calls["n"] += 1
+        return png[:20] + bytes([calls["n"]])  # distinct smaller output each call
+
+    watcher = ClipboardWatcher(clipboard=clip, optimize_fn=optimize)
     results = []
     watcher.optimized.connect(results.append)
 
-    for i in range(20):
-        original = b"\x89PNG\r\n\x1a\n" + f"unique-{i}-".encode() + b"z" * 1000
-        clip.setMimeData(_png_mime(original))
-        watcher.wait_for_done(5000)
-        qapp.processEvents()
+    original_one = b"\x89PNG\r\n\x1a\n" + b"one-" + b"z" * 1000
+    original_two = b"\x89PNG\r\n\x1a\n" + b"two-" + b"z" * 1000
 
-    assert len(results) == 20  # every distinct image was optimized
-    assert len(watcher._undo_store) <= 16
+    clip.setMimeData(_png_mime(original_one))
+    watcher.wait_for_done(5000)
+    qapp.processEvents()
+
+    clip.setMimeData(_png_mime(original_two))
+    watcher.wait_for_done(5000)
+    qapp.processEvents()
+
+    assert len(results) == 2
+    first_token, second_token = results[0].undo_token, results[1].undo_token
+    assert first_token != second_token
+
+    # The old (superseded) token no longer restores anything: this must be a
+    # TRUE no-op, not merely "didn't restore original_one" (which a broken
+    # token check could satisfy by wrongly restoring the *current* slot).
+    optimized_before_stale_undo = bytes(clip.mimeData().data("image/png"))
+    watcher.undo(first_token)  # no-op, must not raise
+    assert bytes(clip.mimeData().data("image/png")) == optimized_before_stale_undo
+    # The current (second) slot must remain intact — untouched by the stale call.
+    assert watcher._undo_token == second_token
+    assert watcher._undo_original is not None
+
+    # The current token restores the correct original and clears the slot
+    # (single-use), so a repeat call with the same token is a no-op.
+    watcher.undo(second_token)
+    assert bytes(clip.mimeData().data("image/png")) == original_two
+    assert watcher._undo_token is None
+    assert watcher._undo_original is None
+
+    after_first_restore = bytes(clip.mimeData().data("image/png"))
+    watcher.undo(second_token)  # already used, no-op
+    assert bytes(clip.mimeData().data("image/png")) == after_first_restore
+    assert watcher._undo_token is None
+    assert watcher._undo_original is None
 
 
 def test_watcher_dedupes_repeated_dataChanged_before_worker_finishes(qapp):

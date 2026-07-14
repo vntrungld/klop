@@ -1,3 +1,4 @@
+import json as _json
 import shutil
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from clop_kde.backup import BackupStore
 from clop_kde.cli import main
 from clop_kde.config import Config
 from clop_kde.engine import Engine
+from clop_kde.history import HistoryStore
 
 
 def test_caps_lists_tools(capsys, monkeypatch):
@@ -144,3 +146,78 @@ def test_optimize_error_result_prints_to_stderr_and_continues(
     )
     assert optimized_line is not None
     assert "good.png" in optimized_line
+
+
+def test_optimize_records_file_history(tmp_path, monkeypatch):
+    from clop_kde.cli import main
+
+    hist = tmp_path / "history.jsonl"
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    # Force an OPTIMIZED result without invoking real tools.
+    from clop_kde import cli as cli_mod
+    from clop_kde.job import JobResult, JobStatus
+
+    f = tmp_path / "a.png"
+    f.write_bytes(b"x" * 100)
+
+    class _Eng:
+        def optimize(self, job):
+            return JobResult(JobStatus.OPTIMIZED, job.source_path, 100, 40, backup_id="bid1")
+
+    monkeypatch.setattr(cli_mod, "_build_engine", lambda: _Eng())
+    rc = main(["optimize", str(f)])
+    assert rc == 0
+    rows = HistoryStore(hist).entries()
+    assert len(rows) == 1
+    assert rows[0].kind == "file"
+    assert rows[0].name == "a.png"
+    assert rows[0].backup_id == "bid1"
+
+
+def test_undo_marks_history_undone(tmp_path, monkeypatch):
+    from clop_kde.backup import BackupStore
+    from clop_kde.cli import main
+
+    hist = tmp_path / "history.jsonl"
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    # Seed a history row and a matching backup.
+    store = HistoryStore(hist)
+    f = tmp_path / "a.png"
+    f.write_bytes(b"ORIGINAL")
+    bstore = BackupStore(tmp_path / "backups")
+    bid = bstore.backup(f)
+    store.record("file", "a.png", str(f), 100, 40, backup_id=bid)
+    f.write_bytes(b"CHANGED")
+
+    rc = main(["undo", bid])
+    assert rc == 0
+    assert HistoryStore(hist).entries()[0].undone is True
+
+
+def test_history_json_outputs_entries(tmp_path, monkeypatch, capsys):
+    from clop_kde.cli import main
+
+    hist = tmp_path / "history.jsonl"
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
+    HistoryStore(hist).record("file", "a.png", "/tmp/a.png", 100, 40, backup_id="b1")
+    rc = main(["history", "--json"])
+    assert rc == 0
+    data = _json.loads(capsys.readouterr().out)
+    assert isinstance(data, list)
+    assert data[0]["name"] == "a.png"
+    assert data[0]["backup_id"] == "b1"
+
+
+def test_history_table_lists_names(tmp_path, monkeypatch, capsys):
+    from clop_kde.cli import main
+
+    hist = tmp_path / "history.jsonl"
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
+    HistoryStore(hist).record("clipboard", "Clipboard image", None, 500, 200)
+    rc = main(["history"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Clipboard image" in out
+    assert "clipboard" in out

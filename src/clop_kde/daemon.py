@@ -12,6 +12,7 @@ from .clipboard import ClipboardWatcher, optimize_image_bytes
 from .config import load_config
 from .droptarget import DropTargetWindow
 from .format import human_size, percent_saved
+from .history import HistoryStore
 from .notifier import DBusNotificationBackend, Notifier
 from .overlay import ResultOverlay
 from .queue import OptimizationQueue
@@ -28,18 +29,24 @@ class Daemon(NamedTuple):
     router: object
 
 
-def build_daemon(app, *, engine=None, backend=None, clipboard=None, overlay=None, droptarget=None):
+def build_daemon(app, *, engine=None, backend=None, clipboard=None, overlay=None, droptarget=None, history=None):
     engine = engine or _build_engine()
     config = load_config()
+    history = history or HistoryStore()
+
+    def _undo_file(backup_id):
+        engine.undo(backup_id)
+        history.mark_undone(backup_id)
+
     queue = OptimizationQueue(optimize_fn=engine.optimize, concurrency=config.concurrency)
     app.aboutToQuit.connect(lambda: queue.wait_for_done(3000))
     backend = backend or DBusNotificationBackend()
-    notifier = Notifier(backend=backend, undo_fn=engine.undo)
-    overlay = overlay or ResultOverlay(undo_fn=engine.undo)
+    notifier = Notifier(backend=backend, undo_fn=_undo_file)
+    overlay = overlay or ResultOverlay(undo_fn=_undo_file)
     droptarget = droptarget or DropTargetWindow(submit_fn=queue.submit)
     tray = TrayApp(queue=queue, icon=load_tray_icon(), drop_toggle_fn=droptarget.toggle)
 
-    router = ResultRouter(tray, overlay, notifier)
+    router = ResultRouter(tray, overlay, notifier, history=history)
     queue.job_done.connect(router.on_job_done)
     queue.job_started.connect(router.on_job_started)
 
@@ -59,6 +66,13 @@ def build_daemon(app, *, engine=None, backend=None, clipboard=None, overlay=None
 
         def _on_clipboard_optimized(result):
             tray.record_saved(result.saved_bytes)
+            history.record(
+                "clipboard",
+                "Clipboard image",
+                None,
+                result.original_size,
+                result.new_size,
+            )
             body = (
                 f"{human_size(result.original_size)} → "
                 f"{human_size(result.new_size)} "
