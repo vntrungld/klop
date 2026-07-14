@@ -73,3 +73,31 @@ def test_unchanged_and_skipped_dismiss_pending_silently():
         )
         assert tray.saved == [] and overlay.shown == [] and notifier.results == []
         assert overlay.dismissed == 1  # pending card cleared, nothing else
+
+
+class FakeHistory:
+    def __init__(self):
+        self.records = []
+
+    def record(self, kind, name, path, original_size, new_size, backup_id=None):
+        self.records.append((kind, name, path, original_size, new_size, backup_id))
+
+
+def test_optimized_records_file_history():
+    tray, overlay, notifier, history = FakeTray(), FakeOverlay(), FakeNotifier(), FakeHistory()
+    ResultRouter(tray, overlay, notifier, history=history).on_job_done(_optimized())
+    assert history.records == [("file", "a.png", "/tmp/a.png", 1000, 400, "b1")]
+
+
+def test_non_optimized_does_not_record():
+    tray, overlay, notifier, history = FakeTray(), FakeOverlay(), FakeNotifier(), FakeHistory()
+    router = ResultRouter(tray, overlay, notifier, history=history)
+    router.on_job_done(JobResult(JobStatus.ERROR, Path("/tmp/a.png"), 0, 0, message="x"))
+    router.on_job_done(JobResult(JobStatus.SKIPPED, Path("/tmp/a.png"), 10, 10))
+    assert history.records == []
+
+
+def test_optimized_without_history_does_not_crash():
+    tray, overlay, notifier = FakeTray(), FakeOverlay(), FakeNotifier()
+    ResultRouter(tray, overlay, notifier).on_job_done(_optimized())  # history=None
+    assert len(overlay.shown) == 1
