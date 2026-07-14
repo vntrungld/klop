@@ -9,6 +9,7 @@ PlasmoidItem {
     id: root
 
     property int savedTotal: 0
+    property alias historyModel: historyModel
 
     // Shared history model consumed by the full representation (Task 6).
     ListModel { id: historyModel }
@@ -44,13 +45,13 @@ PlasmoidItem {
         if (!paths || paths.length === 0)
             return;
         var args = paths.map(shquote).join(" ");
-        exec.run(Backend.CLOP_BIN + " optimize " + args, function (code, out, err) {
+        exec.run(shquote(Backend.CLOP_BIN) + " optimize " + args, function (code, out, err) {
             refreshHistory();
         });
     }
 
     function refreshHistory() {
-        exec.run(Backend.CLOP_BIN + " history --json", function (code, out, err) {
+        exec.run(shquote(Backend.CLOP_BIN) + " history --json", function (code, out, err) {
             if (code !== 0)
                 return;
             var rows;
@@ -81,7 +82,7 @@ PlasmoidItem {
     function undoEntry(backupId) {
         if (!backupId)
             return;
-        exec.run(Backend.CLOP_BIN + " undo " + shquote(backupId), function (code, out, err) {
+        exec.run(shquote(Backend.CLOP_BIN) + " undo " + shquote(backupId), function (code, out, err) {
             refreshHistory();
         });
     }
