@@ -4,6 +4,13 @@ import pytest
 from PIL import Image
 
 
+@pytest.fixture(autouse=True)
+def _isolate_history(tmp_path, monkeypatch):
+    # Point every test's history at its own tmp file; tests that need a
+    # specific path override this with their own monkeypatch.setenv.
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
+
+
 @pytest.fixture
 def sample_png(tmp_path):
     p = tmp_path / "sample.png"
