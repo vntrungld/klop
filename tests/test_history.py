@@ -1,5 +1,3 @@
-import json
-
 from clop_kde.history import HistoryEntry, HistoryStore
 
 
@@ -93,3 +91,34 @@ def test_to_dict_from_dict_roundtrip_and_missing_undone(tmp_path):
 
 def test_missing_file_reads_empty(tmp_path):
     assert HistoryStore(tmp_path / "nope.jsonl").entries() == []
+
+
+def test_default_history_file_uses_env_override(monkeypatch, tmp_path):
+    from clop_kde.history import _default_history_file
+
+    target = tmp_path / "custom.jsonl"
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(target))
+    assert _default_history_file() == target
+
+
+def test_default_history_file_falls_back_to_home(monkeypatch):
+    from pathlib import Path
+
+    from clop_kde.history import _default_history_file
+
+    monkeypatch.delenv("CLOP_KDE_HISTORY_FILE", raising=False)
+    assert (
+        _default_history_file()
+        == Path.home() / ".local" / "share" / "clop-kde" / "history.jsonl"
+    )
+
+
+def test_store_without_path_uses_env_default(monkeypatch, tmp_path):
+    from clop_kde.history import HistoryStore
+
+    target = tmp_path / "envstore.jsonl"
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(target))
+    store = HistoryStore()  # no explicit path -> resolves via env
+    store.record("file", "a.png", "/tmp/a.png", 10, 5, backup_id="b1")
+    assert target.exists()
+    assert store.entries()[0].name == "a.png"
