@@ -22,3 +22,14 @@ def test_full_representation_lists_history_and_undo():
     assert "historyModel" in full          # bound to the shared model
     assert "undoEntry" in full             # Undo button wired to the root
     assert "savedTotal" in full            # header shows the running total
+
+
+def test_config_page_is_registered_and_calls_cli():
+    cfgqml = (PKG / "contents" / "config" / "config.qml").read_text()
+    assert "ConfigGeneral.qml" in cfgqml
+    form = (PKG / "contents" / "ui" / "ConfigGeneral.qml").read_text()
+    assert "config get --json" in form   # loads current values
+    assert "config set" in form          # persists on save
+    for field in ("png_lossy", "pngquant_quality", "jpeg_max_quality",
+                  "min_bytes_saved", "concurrency", "clipboard_watch"):
+        assert field in form
