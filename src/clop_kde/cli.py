@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .backup import BackupStore
 from .capabilities import KNOWN_TOOLS, detect_capabilities
-from .config import load_config
+from .config import apply_overrides, config_to_dict, load_config, save_config
 from .engine import Engine
 from .format import human_size, percent_saved
 from .history import HistoryStore
@@ -169,6 +169,34 @@ def _cmd_install_dolphin(_args) -> int:
     return 0
 
 
+def _cmd_config_get(args) -> int:
+    data = config_to_dict(load_config())
+    if args.json:
+        print(json.dumps(data))
+    else:
+        for key, value in data.items():
+            print(f"{key} = {value}")
+    return 0
+
+
+def _cmd_config_set(args) -> int:
+    overrides: dict[str, str] = {}
+    for item in args.assignments:
+        if "=" not in item:
+            print(f"error: expected key=value, got: {item}", file=sys.stderr)
+            return 2
+        key, value = item.split("=", 1)
+        overrides[key.strip()] = value.strip()
+    try:
+        updated = apply_overrides(load_config(), overrides)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    save_config(updated)
+    print(json.dumps(config_to_dict(updated)))
+    return 0
+
+
 def _cmd_daemon(_args) -> int:
     from .daemon import run_daemon  # lazy: keeps Qt out of the headless CLI import path
 
@@ -201,6 +229,15 @@ def main(argv: list[str] | None = None) -> int:
         "install-dolphin", help="install the Dolphin right-click 'Optimize with Clop' menu"
     )
     p_install.set_defaults(func=_cmd_install_dolphin)
+
+    p_config = sub.add_parser("config", help="get or set optimizer settings")
+    csub = p_config.add_subparsers(dest="config_cmd", required=True)
+    p_cget = csub.add_parser("get", help="print current config")
+    p_cget.add_argument("--json", action="store_true", help="output as JSON")
+    p_cget.set_defaults(func=_cmd_config_get)
+    p_cset = csub.add_parser("set", help="set config keys (key=value ...)")
+    p_cset.add_argument("assignments", nargs="+", metavar="key=value")
+    p_cset.set_defaults(func=_cmd_config_set)
 
     args = parser.parse_args(argv)
     return args.func(args)

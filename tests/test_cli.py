@@ -279,3 +279,47 @@ def test_history_table_lists_names(tmp_path, monkeypatch, capsys):
     assert rc == 0
     assert "Clipboard image" in out
     assert "clipboard" in out
+
+
+def test_config_get_json_has_all_fields(capsys, monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))  # no config file -> defaults
+    rc = main(["config", "get", "--json"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    data = _json.loads(out)
+    assert data["png_lossy"] is True
+    assert data["pngquant_quality"] == [65, 80]
+
+
+def test_config_set_persists_and_prints_effective(tmp_path, capsys, monkeypatch):
+    cfg = tmp_path / "config.toml"
+    import clop_kde.config as config_mod
+    monkeypatch.setattr(config_mod, "default_config_path", lambda: cfg)
+
+    rc = main(["config", "set", "png_lossy=false", "jpeg_max_quality=70"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    printed = _json.loads(out)
+    assert printed["png_lossy"] is False and printed["jpeg_max_quality"] == 70
+    # persisted so a fresh load sees it
+    from clop_kde.config import load_config
+    reloaded = load_config(cfg)
+    assert reloaded.png_lossy is False and reloaded.jpeg_max_quality == 70
+
+
+def test_config_set_unknown_key_errors_and_leaves_file(tmp_path, capsys, monkeypatch):
+    cfg = tmp_path / "config.toml"
+    import clop_kde.config as config_mod
+    monkeypatch.setattr(config_mod, "default_config_path", lambda: cfg)
+
+    rc = main(["config", "set", "bogus=1"])
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "bogus" in err
+    assert not cfg.exists()  # nothing written
+
+
+def test_config_set_bad_assignment_errors(capsys):
+    rc = main(["config", "set", "png_lossy"])  # missing '='
+    assert rc == 2
+    assert "key=value" in capsys.readouterr().err
