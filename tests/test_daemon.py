@@ -204,3 +204,43 @@ def test_clipboard_finished_does_not_dismiss_a_file_result_card(qapp):
 
     assert overlay.shown == [file_result]
     assert overlay.dismissed == 0  # clipboard finished must not dismiss the file result card
+
+
+class FakeHistory:
+    def __init__(self):
+        self.records = []
+        self.undone = []
+
+    def record(self, kind, name, path, original_size, new_size, backup_id=None):
+        self.records.append((kind, name, path, original_size, new_size, backup_id))
+
+    def mark_undone(self, backup_id):
+        self.undone.append(backup_id)
+
+
+def test_build_daemon_records_file_result(qapp, tmp_path):
+    engine = FakeEngine()
+    history = FakeHistory()
+    d = build_daemon(qapp, engine=engine, backend=FakeBackend(), history=history)
+
+    d.queue.submit([tmp_path / "z.png"])
+    d.queue.wait_for_done(5000)
+    qapp.processEvents()
+
+    assert len(history.records) == 1
+    kind, name, _path, orig, new, bid = history.records[0]
+    assert (kind, name, orig, new, bid) == ("file", "z.png", 1000, 200, "b1")
+
+
+def test_build_daemon_file_undo_marks_history_undone(qapp, tmp_path):
+    engine = FakeEngine()
+    history = FakeHistory()
+    d = build_daemon(qapp, engine=engine, backend=FakeBackend(), history=history)
+
+    d.queue.submit([tmp_path / "z.png"])
+    d.queue.wait_for_done(5000)
+    qapp.processEvents()
+
+    d.overlay.undo_button.click()
+    assert engine.undone == ["b1"]
+    assert history.undone == ["b1"]
