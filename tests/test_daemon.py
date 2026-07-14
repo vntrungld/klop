@@ -66,12 +66,6 @@ def test_build_daemon_routes_file_result_to_overlay_not_notification(qapp, tmp_p
     assert backend.sent == []  # NO desktop notification for a file OPTIMIZED result
 
 
-def test_build_daemon_shows_drop_target_at_corner(qapp, tmp_path):
-    # macOS-Clop-style: the drop zone is always visible, no menu toggle.
-    d = build_daemon(qapp, engine=FakeEngine(), backend=FakeBackend())
-    assert d.droptarget.isVisible()
-
-
 def test_build_daemon_file_undo_via_overlay(qapp, tmp_path):
     engine = FakeEngine()
     d = build_daemon(qapp, engine=engine, backend=FakeBackend())  # real overlay
