@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, QUrl
+from PySide6.QtCore import QMimeData, QPoint, QRect, Qt, QUrl
 
 from clop_kde.droptarget import DropTargetWindow, _urls_to_paths
 
@@ -47,10 +47,16 @@ def test_drop_with_no_local_files_submits_nothing(qapp):
     assert submitted == []
 
 
-def test_toggle_shows_and_hides(qapp):
+def test_drop_target_is_frameless_and_stays_on_top(qapp):
     window = DropTargetWindow(submit_fn=lambda paths: None)
-    assert not window.isVisible()
-    window.toggle()
-    assert window.isVisible()
-    window.toggle()
-    assert not window.isVisible()
+    flags = window.windowFlags()
+    assert flags & Qt.WindowType.FramelessWindowHint
+    assert flags & Qt.WindowType.WindowStaysOnTopHint
+
+
+def test_position_at_corner_pins_window_to_bottom_right(qapp):
+    window = DropTargetWindow(submit_fn=lambda paths: None)
+    window.resize(240, 140)
+    window.position_at_corner(QRect(0, 0, 1920, 1080), margin=24)
+    # right/bottom edge sits `margin` px from the screen's available edge
+    assert window.pos() == QPoint(1919 - 240 - 24, 1079 - 140 - 24)

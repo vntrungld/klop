@@ -1,43 +1,20 @@
-from pathlib import Path
-
 from clop_kde import app as app_module
 from clop_kde.app import TrayApp, load_tray_icon
 
 
-class FakeQueue:
-    def __init__(self):
-        self.submitted = []
-
-    def submit(self, paths):
-        self.submitted.append(list(paths))
-
-
-def test_optimize_action_submits_picked_files(qapp):
-    queue = FakeQueue()
-    picked = [Path("/tmp/a.png"), Path("/tmp/b.png")]
-    tray = TrayApp(queue=queue, pick_files=lambda: picked)
-
-    tray.optimize_action.trigger()
-
-    assert queue.submitted == [picked]
+def test_menu_has_no_file_picker_action(qapp):
+    tray = TrayApp()
+    # The file picker is gone; files are optimized via Dolphin (CLI) or the
+    # always-on drop target, not a menu-driven QFileDialog.
+    assert not hasattr(tray, "optimize_action")
+    assert all(not a.text().startswith("Optimize files") for a in tray._menu.actions())
 
 
-def test_disabling_greys_out_the_picker_and_blocks_submit(qapp):
-    queue = FakeQueue()
-    tray = TrayApp(queue=queue, pick_files=lambda: [Path("/tmp/a.png")])
-
-    tray.enabled_action.setChecked(False)  # fires toggled(False)
-
-    assert tray.optimize_action.isEnabled() is False
-    tray.optimize_action.trigger()  # disabled QAction: triggered is not emitted
-    assert queue.submitted == []
-
-
-def test_show_drop_target_action_calls_toggle(qapp):
-    toggled = []
-    tray = TrayApp(queue=FakeQueue(), pick_files=lambda: [], drop_toggle_fn=lambda: toggled.append(1))
-    tray.drop_action.trigger()
-    assert toggled == [1]
+def test_enabled_action_defaults_checked_and_toggles(qapp):
+    tray = TrayApp()
+    assert tray.enabled_action.isChecked() is True
+    tray.enabled_action.setChecked(False)
+    assert tray.enabled_action.isChecked() is False
 
 
 def test_load_tray_icon_returns_a_non_null_icon(qapp):
@@ -46,8 +23,7 @@ def test_load_tray_icon_returns_a_non_null_icon(qapp):
 
 
 def test_record_saved_accumulates_total_and_updates_text(qapp):
-    queue = FakeQueue()
-    tray = TrayApp(queue=queue, pick_files=lambda: [])
+    tray = TrayApp()
 
     tray.record_saved(5000)
     tray.record_saved(3000)
@@ -58,8 +34,7 @@ def test_record_saved_accumulates_total_and_updates_text(qapp):
 
 
 def test_open_config_does_not_raise_when_xdg_open_is_missing(qapp, monkeypatch, tmp_path):
-    queue = FakeQueue()
-    tray = TrayApp(queue=queue, pick_files=lambda: [])
+    tray = TrayApp()
     monkeypatch.setattr(app_module, "default_config_path", lambda: tmp_path / "clop-kde.toml")
 
     def raise_missing(*args, **kwargs):

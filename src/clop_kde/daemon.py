@@ -44,7 +44,15 @@ def build_daemon(app, *, engine=None, backend=None, clipboard=None, overlay=None
     notifier = Notifier(backend=backend, undo_fn=_undo_file)
     overlay = overlay or ResultOverlay(undo_fn=_undo_file)
     droptarget = droptarget or DropTargetWindow(submit_fn=queue.submit)
-    tray = TrayApp(queue=queue, icon=load_tray_icon(), drop_toggle_fn=droptarget.toggle)
+    # Clop-macOS style: the drop zone lives in a screen corner for the daemon's
+    # whole lifetime — there is no menu toggle and no file picker.
+    from PySide6.QtGui import QGuiApplication
+
+    screen = QGuiApplication.primaryScreen()
+    if screen is not None:
+        droptarget.position_at_corner(screen.availableGeometry())
+    droptarget.show()
+    tray = TrayApp(icon=load_tray_icon())
 
     router = ResultRouter(tray, overlay, notifier, history=history)
     queue.job_done.connect(router.on_job_done)

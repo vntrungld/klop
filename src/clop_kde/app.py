@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Callable
 
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication, QFileDialog, QMenu, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .config import default_config_path
 from .format import human_size
@@ -21,45 +20,23 @@ def load_tray_icon() -> QIcon:
     return QIcon.fromTheme("image-x-generic")
 
 
-def _default_pick_files() -> list[Path]:
-    paths, _ = QFileDialog.getOpenFileNames(None, "Optimize files")
-    return [Path(p) for p in paths]
-
-
 class TrayApp:
-    """System-tray front end: a menu that feeds files to the queue, toggles the
-    drop target, and shows a running savings total."""
+    """System-tray front end: shows a running savings total and an enable
+    toggle. Files are optimized via Dolphin (the CLI) or the always-on drop
+    target, not from the menu."""
 
-    def __init__(
-        self,
-        queue,
-        *,
-        icon: QIcon | None = None,
-        pick_files: Callable[[], list[Path]] = _default_pick_files,
-        drop_toggle_fn: Callable[[], None] | None = None,
-    ):
-        self._queue = queue
-        self._pick_files = pick_files
-        self._drop_toggle_fn = drop_toggle_fn
-        self._enabled = True
+    def __init__(self, *, icon: QIcon | None = None):
         self._saved_total = 0
 
         self._menu = QMenu()
-        self.optimize_action = self._menu.addAction("Optimize files…")
-        self.optimize_action.triggered.connect(self._on_optimize)
-
         self.saved_action = self._menu.addAction("Saved: 0B")
         self.saved_action.setEnabled(False)
 
         self._menu.addSeparator()
 
-        self.drop_action = self._menu.addAction("Show drop target")
-        self.drop_action.triggered.connect(self._on_toggle_drop)
-
         self.enabled_action = self._menu.addAction("Enabled")
         self.enabled_action.setCheckable(True)
         self.enabled_action.setChecked(True)
-        self.enabled_action.toggled.connect(self._on_enabled_toggled)
 
         self._menu.addAction("Open config").triggered.connect(self._on_open_config)
         self._menu.addAction("Quit").triggered.connect(self._on_quit)
@@ -77,21 +54,6 @@ class TrayApp:
     def record_saved(self, saved_bytes: int) -> None:
         self._saved_total += saved_bytes
         self.saved_action.setText(f"Saved: {human_size(self._saved_total)}")
-
-    def _on_optimize(self, _checked: bool = False) -> None:
-        if not self._enabled:
-            return
-        paths = self._pick_files()
-        if paths:
-            self._queue.submit(paths)
-
-    def _on_toggle_drop(self, _checked: bool = False) -> None:
-        if self._drop_toggle_fn is not None:
-            self._drop_toggle_fn()
-
-    def _on_enabled_toggled(self, checked: bool) -> None:
-        self._enabled = checked
-        self.optimize_action.setEnabled(checked)
 
     def _on_open_config(self, _checked: bool = False) -> None:
         path = default_config_path()
