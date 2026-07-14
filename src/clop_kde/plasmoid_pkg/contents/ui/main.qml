@@ -119,9 +119,11 @@ PlasmoidItem {
         }
     }
 
-    // Placeholder until Task 6 replaces it with the real popup.
-    fullRepresentation: ColumnLayout {
-        Kirigami.Heading { text: "Klop" }
+    fullRepresentation: FullRepresentation { controller: root }
+
+    onExpandedChanged: {
+        if (expanded)
+            refreshHistory();
     }
 
     Component.onCompleted: refreshHistory()
