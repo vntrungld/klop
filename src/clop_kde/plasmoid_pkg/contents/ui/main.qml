@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Layouts
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasma5support as P5Support
@@ -8,7 +7,7 @@ import "../code/backend.js" as Backend
 PlasmoidItem {
     id: root
 
-    property int savedTotal: 0
+    property double savedTotal: 0
     property alias historyModel: historyModel
 
     // Shared history model consumed by the full representation (Task 6).
@@ -104,7 +103,9 @@ PlasmoidItem {
             onDropped: (drop) => {
                 var paths = [];
                 for (var i = 0; i < drop.urls.length; i++) {
-                    var u = decodeURIComponent(drop.urls[i].toString());
+                    var raw = drop.urls[i].toString();
+                    var u;
+                    try { u = decodeURIComponent(raw); } catch (e) { u = raw; }
                     if (u.indexOf("file://") === 0)
                         paths.push(u.substring("file://".length));
                 }

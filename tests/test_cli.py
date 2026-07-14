@@ -11,6 +11,19 @@ from clop_kde.engine import Engine
 from clop_kde.history import HistoryStore
 
 
+def test_cli_import_is_qt_free():
+    import subprocess
+    import sys
+
+    code = (
+        "import clop_kde.cli, sys; "
+        "assert 'PySide6' not in sys.modules, "
+        "sorted(m for m in sys.modules if 'PySide' in m)"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
 def test_caps_lists_tools(capsys, monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/" + name)
     rc = main(["caps"])

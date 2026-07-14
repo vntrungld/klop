@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from pathlib import Path
@@ -25,7 +26,7 @@ def _write_backend_js(pkg_dir: Path, clop_bin: str) -> None:
     code_dir.mkdir(parents=True, exist_ok=True)
     # A QML .pragma library so every representation shares one constant.
     (code_dir / "backend.js").write_text(
-        f'.pragma library\nvar CLOP_BIN = "{clop_bin}";\n'
+        f".pragma library\nvar CLOP_BIN = {json.dumps(clop_bin)};\n"
     )
 
 
