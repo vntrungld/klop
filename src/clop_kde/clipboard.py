@@ -54,7 +54,6 @@ def optimize_image_bytes(png_bytes, config: Config, capabilities, runner=None) -
 
 
 _SEEN_MAX = 32
-_UNDO_MAX = 16
 
 
 @dataclass
@@ -101,7 +100,8 @@ class ClipboardWatcher(QObject):
         self._pool = QThreadPool(self)
         self._pool.setMaxThreadCount(1)
         self._seen: OrderedDict[str, None] = OrderedDict()
-        self._undo_store: OrderedDict[str, bytes] = OrderedDict()
+        self._undo_original: bytes | None = None  # single most-recent original
+        self._undo_token: str | None = None
         self._undo_counter = 0
         clipboard.dataChanged.connect(self._on_changed)
         self._result_ready.connect(self._on_result_ready)
@@ -110,9 +110,11 @@ class ClipboardWatcher(QObject):
         return self._pool.waitForDone(msec)
 
     def undo(self, token: str) -> None:
-        original = self._undo_store.pop(token, None)
-        if original is None:
-            return
+        if token != self._undo_token or self._undo_original is None:
+            return  # superseded, already-used, or unknown token
+        original = self._undo_original
+        self._undo_original = None
+        self._undo_token = None
         self._remember(content_hash(original))  # restoring must not re-trigger optimize
         self._set_clipboard_png(original)
 
@@ -163,9 +165,8 @@ class ClipboardWatcher(QObject):
             self._remember(content_hash(optimized))
             self._undo_counter += 1
             token = str(self._undo_counter)
-            self._undo_store[token] = original
-            while len(self._undo_store) > _UNDO_MAX:
-                self._undo_store.popitem(last=False)
+            self._undo_original = original  # supersede any previous slot
+            self._undo_token = token
             self._set_clipboard_png(optimized)
             self.optimized.emit(ClipboardResult(len(original), len(optimized), token))
         self.finished.emit()
