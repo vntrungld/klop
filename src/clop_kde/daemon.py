@@ -10,7 +10,6 @@ from .capabilities import detect_capabilities
 from .cli import _build_engine
 from .clipboard import ClipboardWatcher, optimize_image_bytes
 from .config import load_config
-from .droptarget import DropTargetWindow
 from .format import human_size, percent_saved
 from .history import HistoryStore
 from .notifier import DBusNotificationBackend, Notifier
@@ -25,11 +24,10 @@ class Daemon(NamedTuple):
     notifier: object
     watcher: object
     overlay: object
-    droptarget: object
     router: object
 
 
-def build_daemon(app, *, engine=None, backend=None, clipboard=None, overlay=None, droptarget=None, history=None):
+def build_daemon(app, *, engine=None, backend=None, clipboard=None, overlay=None, history=None):
     engine = engine or _build_engine()
     config = load_config()
     history = history or HistoryStore()
@@ -43,15 +41,6 @@ def build_daemon(app, *, engine=None, backend=None, clipboard=None, overlay=None
     backend = backend or DBusNotificationBackend()
     notifier = Notifier(backend=backend, undo_fn=_undo_file)
     overlay = overlay or ResultOverlay(undo_fn=_undo_file)
-    droptarget = droptarget or DropTargetWindow(submit_fn=queue.submit)
-    # Clop-macOS style: the drop zone lives in a screen corner for the daemon's
-    # whole lifetime — there is no menu toggle and no file picker.
-    from PySide6.QtGui import QGuiApplication
-
-    screen = QGuiApplication.primaryScreen()
-    if screen is not None:
-        droptarget.position_at_corner(screen.availableGeometry())
-    droptarget.show()
     tray = TrayApp(icon=load_tray_icon())
 
     router = ResultRouter(tray, overlay, notifier, history=history)
@@ -112,7 +101,6 @@ def build_daemon(app, *, engine=None, backend=None, clipboard=None, overlay=None
         notifier=notifier,
         watcher=watcher,
         overlay=overlay,
-        droptarget=droptarget,
         router=router,
     )
 

@@ -1,0 +1,14 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Id": "org.trungld.klop",
+        "Name": "Klop",
+        "Description": "Optimize images by dropping them on the panel",
+        "Icon": "image-x-generic",
+        "Category": "Utilities",
+        "Authors": [{ "Name": "Lam Duc Trung", "Email": "vn.trungld@gmail.com" }],
+        "License": "MIT",
+        "Version": "0.0.1"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
