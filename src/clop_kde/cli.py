@@ -255,6 +255,17 @@ def _cmd_optimize_url(args) -> int:
     return 0
 
 
+def _cmd_copy(args) -> int:
+    path = Path(args.path)
+    if not path.exists():
+        print(f"error: no such file: {path}", file=sys.stderr)
+        return 1
+    if webfetch.copy_image_to_clipboard(path):
+        return 0
+    print("error: could not copy image to clipboard", file=sys.stderr)
+    return 1
+
+
 def _cmd_daemon(_args) -> int:
     from .daemon import run_daemon  # lazy: keeps Qt out of the headless CLI import path
 
@@ -272,6 +283,10 @@ def main(argv: list[str] | None = None) -> int:
     p_opturl = sub.add_parser("optimize-url", help="download, optimize, save, and copy an image URL")
     p_opturl.add_argument("url")
     p_opturl.set_defaults(func=_cmd_optimize_url)
+
+    p_copy = sub.add_parser("copy", help="copy an image file to the clipboard")
+    p_copy.add_argument("path")
+    p_copy.set_defaults(func=_cmd_copy)
 
     p_undo = sub.add_parser("undo", help="restore a backed-up original")
     p_undo.add_argument("backup_id")

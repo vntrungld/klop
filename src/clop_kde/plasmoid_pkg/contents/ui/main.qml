@@ -10,6 +10,11 @@ PlasmoidItem {
     property double savedTotal: 0
     property alias historyModel: historyModel
 
+    // Jobs currently running. The executable data source only reports back on
+    // completion, so we can't show a real percentage — the full representation
+    // shows an indeterminate bar while this is > 0.
+    property int pendingCount: 0
+
     // Shared history model consumed by the full representation (Task 6).
     ListModel { id: historyModel }
 
@@ -44,17 +49,41 @@ PlasmoidItem {
         if (!paths || paths.length === 0)
             return;
         var args = paths.map(shquote).join(" ");
+        pendingCount++;
         exec.run(shquote(Backend.CLOP_BIN) + " optimize " + args, function (code, out, err) {
+            pendingCount--;
             refreshHistory();
         });
     }
 
     function optimizeUrls(urls) {
         for (var i = 0; i < urls.length; i++) {
+            pendingCount++;
             exec.run(shquote(Backend.CLOP_BIN) + " optimize-url " + shquote(urls[i]), function (code, out, err) {
+                pendingCount--;
                 refreshHistory();
             });
         }
+    }
+
+    // Row actions in the history list. `path` is null for clipboard entries.
+    function openImage(path) {
+        if (path)
+            exec.run("xdg-open " + shquote(path), function () {});
+    }
+
+    function openFolder(path) {
+        if (!path)
+            return;
+        // Highlight the file in Dolphin; fall back to opening its directory.
+        var dir = String(path).replace(/\/[^/]*$/, "");
+        exec.run("dolphin --select " + shquote(path)
+                 + " || xdg-open " + shquote(dir), function () {});
+    }
+
+    function copyImage(path) {
+        if (path)
+            exec.run(shquote(Backend.CLOP_BIN) + " copy " + shquote(path), function () {});
     }
 
     function refreshHistory() {
@@ -76,6 +105,7 @@ PlasmoidItem {
                     entryId: String(r.id),
                     kind: r.kind,
                     name: r.name,
+                    path: r.path ? String(r.path) : "",
                     originalSize: r.original_size,
                     newSize: r.new_size,
                     backupId: r.backup_id ? String(r.backup_id) : "",

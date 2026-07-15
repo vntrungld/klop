@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls as QQC2
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.plasmoid
@@ -40,6 +41,23 @@ ColumnLayout {
         }
     }
 
+    // Indeterminate progress while optimize jobs are in flight — the CLI only
+    // reports back on completion, so there is no real percentage to show.
+    RowLayout {
+        Layout.fillWidth: true
+        visible: controller.pendingCount > 0
+        spacing: Kirigami.Units.smallSpacing
+        PlasmaComponents.Label {
+            font: Kirigami.Theme.smallFont
+            opacity: 0.7
+            text: "Optimizing…"
+        }
+        QQC2.ProgressBar {
+            Layout.fillWidth: true
+            indeterminate: true
+        }
+    }
+
     PlasmaComponents.ScrollView {
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -72,8 +90,31 @@ ColumnLayout {
                         }
                     }
                     PlasmaComponents.ToolButton {
+                        icon.name: "document-open"
+                        visible: model.path !== ""
+                        QQC2.ToolTip.text: "Open image"
+                        QQC2.ToolTip.visible: hovered
+                        onClicked: controller.openImage(model.path)
+                    }
+                    PlasmaComponents.ToolButton {
+                        icon.name: "folder-open"
+                        visible: model.path !== ""
+                        QQC2.ToolTip.text: "Open folder"
+                        QQC2.ToolTip.visible: hovered
+                        onClicked: controller.openFolder(model.path)
+                    }
+                    PlasmaComponents.ToolButton {
+                        icon.name: "edit-copy"
+                        visible: model.path !== ""
+                        QQC2.ToolTip.text: "Copy image"
+                        QQC2.ToolTip.visible: hovered
+                        onClicked: controller.copyImage(model.path)
+                    }
+                    PlasmaComponents.ToolButton {
                         icon.name: "edit-undo"
                         visible: model.backupId !== "" && !model.undone
+                        QQC2.ToolTip.text: "Undo"
+                        QQC2.ToolTip.visible: hovered
                         onClicked: controller.undoEntry(model.backupId)
                     }
                 }

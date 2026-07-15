@@ -125,6 +125,32 @@ def test_undo_restores(tmp_path, capsys, monkeypatch):
     assert f.read_bytes() == b"ORIGINAL"
 
 
+def test_copy_puts_image_on_clipboard(tmp_path, monkeypatch):
+    import clop_kde.cli as cli_mod
+
+    f = tmp_path / "a.png"
+    f.write_bytes(b"PNG")
+    seen = {}
+    monkeypatch.setattr(
+        cli_mod.webfetch, "copy_image_to_clipboard",
+        lambda path: seen.setdefault("path", Path(path)) or True,
+    )
+    rc = main(["copy", str(f)])
+    assert rc == 0
+    assert seen["path"] == f
+
+
+def test_copy_reports_failure_when_clipboard_unavailable(tmp_path, monkeypatch, capsys):
+    import clop_kde.cli as cli_mod
+
+    f = tmp_path / "a.png"
+    f.write_bytes(b"PNG")
+    monkeypatch.setattr(cli_mod.webfetch, "copy_image_to_clipboard", lambda path: False)
+    rc = main(["copy", str(f)])
+    assert rc == 1
+    assert "clipboard" in capsys.readouterr().err.lower()
+
+
 def test_optimize_reports_optimized(tmp_path, capsys, monkeypatch, sample_png):
     # Force the OPTIMIZED branch deterministically instead of relying on
     # pngquant's actual behavior (on this machine pngquant reports the
