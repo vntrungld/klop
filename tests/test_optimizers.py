@@ -10,6 +10,8 @@ from clop_kde.optimizers import (
     PNGQUANT,
     VIPS_WEBP,
     select_optimizer,
+    FFMPEG,
+    VIPS_HEIC,
 )
 
 
@@ -99,3 +101,36 @@ def test_select_new_same_ext_optimizers():
     assert select_optimizer(MediaType.PDF, caps, Config()) is GS
     # cwebp missing → vips fallback for WebP
     assert select_optimizer(MediaType.WEBP, {"vips": "/x"}, Config()) is VIPS_WEBP
+
+
+def test_ffmpeg_command_shape_and_output_ext():
+    cfg = Config(video_crf=30, video_codec="libx264", video_preset="fast")
+    cmd = FFMPEG.build_command(Path("/in.mkv"), Path("/out.mp4"), cfg)
+    assert cmd[0] == "ffmpeg"
+    assert cmd[cmd.index("-i") + 1] == "/in.mkv"
+    assert cmd[cmd.index("-c:v") + 1] == "libx264"
+    assert cmd[cmd.index("-crf") + 1] == "30"
+    assert cmd[cmd.index("-preset") + 1] == "fast"
+    assert cmd[-1] == "/out.mp4"          # output is the last arg
+    assert FFMPEG.output_ext == ".mp4"
+
+
+def test_vips_heic_command_shape_and_output_ext():
+    cmd = VIPS_HEIC.build_command(Path("/in.heic"), Path("/out.jpg"), Config(jpeg_max_quality=75))
+    assert cmd[0] == "vips"
+    assert cmd[1] == "copy"
+    assert cmd[2] == "/in.heic"
+    assert cmd[3].startswith("/out.jpg[")
+    assert "Q=75" in cmd[3]
+    assert VIPS_HEIC.output_ext == ".jpg"
+
+
+def test_existing_optimizers_default_output_ext_none():
+    assert PNGQUANT.output_ext is None
+    assert JPEGOPTIM.output_ext is None
+
+
+def test_select_convert_optimizers():
+    caps = {"ffmpeg": "/x", "vips": "/x"}
+    assert select_optimizer(MediaType.VIDEO, caps, Config()) is FFMPEG
+    assert select_optimizer(MediaType.HEIC, caps, Config()) is VIPS_HEIC
