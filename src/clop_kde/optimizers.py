@@ -45,13 +45,54 @@ def _jpegoptim_cmd(inp: Path, out: Path, cfg: Config) -> list[str]:
     ]
 
 
+def _gifsicle_cmd(inp: Path, out: Path, cfg: Config) -> list[str]:
+    cmd = ["gifsicle", "-O3"]
+    if cfg.gif_lossy > 0:
+        cmd.append(f"--lossy={cfg.gif_lossy}")
+    cmd += ["-o", str(out), "--", str(inp)]
+    return cmd
+
+
+def _cwebp_cmd(inp: Path, out: Path, cfg: Config) -> list[str]:
+    return ["cwebp", "-q", str(cfg.webp_quality), "-mt", "-o", str(out), str(inp)]
+
+
+def _vips_webp_cmd(inp: Path, out: Path, cfg: Config) -> list[str]:
+    return ["vips", "copy", str(inp), f"{out}[Q={cfg.webp_quality},strip]"]
+
+
+_PDF_SETTINGS = {"screen", "ebook", "printer", "prepress"}
+
+
+def _gs_cmd(inp: Path, out: Path, cfg: Config) -> list[str]:
+    setting = cfg.pdf_setting if cfg.pdf_setting in _PDF_SETTINGS else "ebook"
+    return [
+        "gs",
+        "-sDEVICE=pdfwrite",
+        "-dCompatibilityLevel=1.4",
+        f"-dPDFSETTINGS=/{setting}",
+        "-dNOPAUSE",
+        "-dQUIET",
+        "-dBATCH",
+        f"-sOutputFile={out}",
+        str(inp),
+    ]
+
+
 PNGQUANT = Optimizer("pngquant", "pngquant", _pngquant_cmd, use_stdout=False)
 JPEGOPTIM = Optimizer("jpegoptim", "jpegoptim", _jpegoptim_cmd, use_stdout=True)
+GIFSICLE = Optimizer("gifsicle", "gifsicle", _gifsicle_cmd, use_stdout=False)
+CWEBP = Optimizer("cwebp", "cwebp", _cwebp_cmd, use_stdout=False)
+VIPS_WEBP = Optimizer("vips", "vips", _vips_webp_cmd, use_stdout=False)
+GS = Optimizer("gs", "gs", _gs_cmd, use_stdout=False)
 
 # First available optimizer per media type wins.
 _REGISTRY: dict[MediaType, list[Optimizer]] = {
     MediaType.PNG: [PNGQUANT],
     MediaType.JPEG: [JPEGOPTIM],
+    MediaType.GIF: [GIFSICLE],
+    MediaType.WEBP: [CWEBP, VIPS_WEBP],
+    MediaType.PDF: [GS],
 }
 
 
