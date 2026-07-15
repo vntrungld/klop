@@ -66,12 +66,18 @@ def test_copy_to_clipboard_uses_wl_copy(tmp_path, monkeypatch):
 
     def fake_run(argv, **kw):
         calls["argv"] = argv
+        calls["kw"] = kw
         return subprocess.CompletedProcess(argv, 0)
 
     monkeypatch.setattr(webfetch.subprocess, "run", fake_run)
     assert webfetch.copy_image_to_clipboard(img) is True
     assert calls["argv"][0] == "/usr/bin/wl-copy"
     assert "image/png" in calls["argv"]
+    # The forked wl-copy daemon inherits our stdout/stderr; if left connected
+    # to a pipe (e.g. `clop-kde optimize-url | cat`), the daemon holds the
+    # pipe open forever and the reader never sees EOF. Must be detached.
+    assert calls["kw"].get("stdout") == subprocess.DEVNULL
+    assert calls["kw"].get("stderr") == subprocess.DEVNULL
 
 
 def test_copy_to_clipboard_false_when_no_tool(tmp_path, monkeypatch):

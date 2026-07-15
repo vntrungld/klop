@@ -106,7 +106,14 @@ def copy_image_to_clipboard(path: Path) -> bool:
     if wl:
         try:
             with open(path, "rb") as fh:
-                subprocess.run([wl, "--type", mime], stdin=fh, timeout=10, check=True)
+                subprocess.run(
+                    [wl, "--type", mime],
+                    stdin=fh,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                    check=True,
+                )
             return True
         except (OSError, subprocess.SubprocessError):
             return False
@@ -115,6 +122,8 @@ def copy_image_to_clipboard(path: Path) -> bool:
         try:
             subprocess.run(
                 [xc, "-selection", "clipboard", "-t", mime, "-i", str(path)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 timeout=10, check=True,
             )
             return True
