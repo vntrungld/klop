@@ -11,6 +11,7 @@ from .config import Config
 from .job import JobResult, JobStatus, OptimizationJob
 from .media import detect_media_type
 from .optimizers import expected_tools, select_optimizer
+from .paths import dedup
 
 
 def _default_runner(cmd: list[str], stdout_path: Path | None) -> int:
@@ -47,7 +48,8 @@ class Engine:
                 message=f"no optimizer available for {media_type.value}{tool_hint}",
             )
 
-        fd, tmp_name = tempfile.mkstemp(dir=source.parent, suffix=source.suffix)
+        out_suffix = optimizer.output_ext or source.suffix
+        fd, tmp_name = tempfile.mkstemp(dir=source.parent, suffix=out_suffix)
         os.close(fd)
         tmp = Path(tmp_name)
         try:
@@ -68,6 +70,7 @@ class Engine:
                     message="already optimal",
                 )
 
+            is_convert = out_suffix.lower() != source.suffix.lower()
             try:
                 backup_id = self.backup_store.backup(source)
                 source_stat = source.stat()
@@ -76,14 +79,23 @@ class Engine:
                     os.chown(tmp, source_stat.st_uid, source_stat.st_gid)
                 except (PermissionError, OSError):
                     pass  # best-effort; not fatal when unprivileged
-                os.replace(tmp, source)  # atomic within same directory
+                if is_convert:
+                    dest = dedup(source.with_suffix(out_suffix))
+                    os.replace(tmp, dest)  # atomic within same directory
+                    try:
+                        source.unlink()  # drop the now-converted original
+                    except OSError:
+                        pass  # dest written and backed up; leftover source is non-fatal
+                else:
+                    dest = source
+                    os.replace(tmp, source)  # atomic within same directory
             except OSError as e:
                 return JobResult(
                     JobStatus.ERROR, source, original_size, original_size,
                     message=f"failed to replace {source.name}: {e}",
                 )
             return JobResult(
-                JobStatus.OPTIMIZED, source, original_size, new_size,
+                JobStatus.OPTIMIZED, dest, original_size, new_size,
                 backup_id=backup_id,
             )
         finally:
