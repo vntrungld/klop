@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from .media import MediaType, _detect_by_magic, detect_media_type
+from .paths import dedup
 
 _MAX_DOWNLOAD = 50 * 1024 * 1024  # 50 MB
 
@@ -62,17 +63,6 @@ def _filename_for(url: str, mtype: MediaType) -> str:
     return (root or "image") + _TYPE_EXT[mtype]
 
 
-def _dedup(path: Path) -> Path:
-    if not path.exists():
-        return path
-    i = 1
-    while True:
-        cand = path.with_name(f"{path.stem}-{i}{path.suffix}")
-        if not cand.exists():
-            return cand
-        i += 1
-
-
 def download_image(
     url: str,
     *,
@@ -95,7 +85,7 @@ def download_image(
         raise ValueError("not an image")
     dest_dir = Path(dest_dir).expanduser()
     dest_dir.mkdir(parents=True, exist_ok=True)
-    target = _dedup(dest_dir / _filename_for(final_url or url, mtype))
+    target = dedup(dest_dir / _filename_for(final_url or url, mtype))
     target.write_bytes(content)
     return target
 
