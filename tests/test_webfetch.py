@@ -79,3 +79,23 @@ def test_copy_to_clipboard_false_when_no_tool(tmp_path, monkeypatch):
     Image.new("RGB", (4, 4)).save(img, "PNG")
     monkeypatch.setattr(webfetch.shutil, "which", lambda name: None)
     assert webfetch.copy_image_to_clipboard(img) is False
+
+
+def test_urllib_fetch_reads_only_up_to_cap(monkeypatch):
+    import io
+    payload = b"x" * 100
+
+    class _Resp(io.BytesIO):
+        def geturl(self):
+            return "https://ex.com/big"
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(webfetch.urllib.request, "urlopen",
+                        lambda req, timeout: _Resp(payload))
+    # here we test the fetcher directly returns at most cap+1 bytes.
+    data, final = webfetch._urllib_fetch("https://ex.com/big", 5, cap=10)
+    assert len(data) == 11  # cap + 1, proving the read is bounded by cap, not the 50MB constant
+    assert final == "https://ex.com/big"

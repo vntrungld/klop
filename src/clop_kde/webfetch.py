@@ -36,11 +36,13 @@ _TYPE_MIME = {
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif"}
 
 
-def _urllib_fetch(url: str, timeout: float) -> tuple[bytes, str]:
+def _urllib_fetch(
+    url: str, timeout: float, cap: int = _MAX_DOWNLOAD
+) -> tuple[bytes, str]:
     req = urllib.request.Request(url, headers={"User-Agent": "clop-kde"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = resp.read(_MAX_DOWNLOAD + 1)  # bound memory
+            data = resp.read(cap + 1)  # bound memory
             return data, resp.geturl()
     except Exception as exc:  # URLError, timeout, HTTPError, ...
         raise ValueError(f"could not fetch {url}: {exc}") from exc
@@ -82,7 +84,8 @@ def download_image(
     scheme = urlparse(url).scheme.lower()
     if scheme not in ("http", "https"):
         raise ValueError(f"unsupported URL scheme: {scheme or '(none)'}")
-    content, final_url = (fetcher or _urllib_fetch)(url, timeout)
+    fetch = fetcher or (lambda u, t: _urllib_fetch(u, t, max_bytes))
+    content, final_url = fetch(url, timeout)
     if len(content) > max_bytes:
         raise ValueError("image too large")
     mtype = _detect_by_magic(content[:32])
