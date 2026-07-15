@@ -111,6 +111,9 @@ def test_ffmpeg_command_shape_and_output_ext():
     assert cmd[cmd.index("-c:v") + 1] == "libx264"
     assert cmd[cmd.index("-crf") + 1] == "30"
     assert cmd[cmd.index("-preset") + 1] == "fast"
+    # Re-encode audio to AAC so opus/vorbis (webm/mkv) remux into mp4 instead
+    # of failing the whole convert.
+    assert cmd[cmd.index("-c:a") + 1] == "aac"
     assert cmd[-1] == "/out.mp4"          # output is the last arg
     assert FFMPEG.output_ext == ".mp4"
 

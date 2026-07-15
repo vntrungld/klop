@@ -93,7 +93,7 @@ def _ffmpeg_cmd(inp: Path, out: Path, cfg: Config) -> list[str]:
         "-preset",
         cfg.video_preset,
         "-c:a",
-        "copy",
+        "aac",
         str(out),
     ]
 
