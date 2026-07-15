@@ -60,6 +60,34 @@ ColumnLayout {
             from: 1; to: 100
         }
         QQC2.SpinBox {
+            id: webpQuality
+            Kirigami.FormData.label: "WebP quality:"
+            from: 1; to: 100
+        }
+        QQC2.SpinBox {
+            id: gifLossy
+            Kirigami.FormData.label: "GIF lossy (0 = off):"
+            from: 0; to: 200
+        }
+        QQC2.ComboBox {
+            id: pdfSetting
+            Kirigami.FormData.label: "PDF quality:"
+            model: ["screen", "ebook", "printer", "prepress"]
+        }
+        QQC2.SpinBox {
+            id: videoCrf
+            Kirigami.FormData.label: "Video CRF:"
+            from: 0; to: 51
+        }
+        QQC2.TextField {
+            id: videoCodec
+            Kirigami.FormData.label: "Video codec:"
+        }
+        QQC2.TextField {
+            id: videoPreset
+            Kirigami.FormData.label: "Video preset:"
+        }
+        QQC2.SpinBox {
             id: minSaved
             Kirigami.FormData.label: "Min bytes saved:"
             from: 0; to: 1000000
@@ -97,6 +125,12 @@ ColumnLayout {
             "png_lossy=" + (pngLossy.checked ? "true" : "false"),
             "pngquant_quality=" + pngMin.value + "," + pngMax.value,
             "jpeg_max_quality=" + jpegMax.value,
+            "webp_quality=" + webpQuality.value,
+            "gif_lossy=" + gifLossy.value,
+            "pdf_setting=" + shquote(pdfSetting.currentValue),
+            "video_crf=" + videoCrf.value,
+            "video_codec=" + shquote(videoCodec.text),
+            "video_preset=" + shquote(videoPreset.text),
             "min_bytes_saved=" + minSaved.value,
             "concurrency=" + concurrency.value,
             "clipboard_watch=" + (clipboardWatch.checked ? "true" : "false")
@@ -115,6 +149,12 @@ ColumnLayout {
             pngMin.value = c.pngquant_quality[0];
             pngMax.value = c.pngquant_quality[1];
             jpegMax.value = c.jpeg_max_quality;
+            webpQuality.value = c.webp_quality;
+            gifLossy.value = c.gif_lossy;
+            pdfSetting.currentIndex = pdfSetting.model.indexOf(c.pdf_setting);
+            videoCrf.value = c.video_crf;
+            videoCodec.text = c.video_codec;
+            videoPreset.text = c.video_preset;
             minSaved.value = c.min_bytes_saved;
             concurrency.value = c.concurrency;
             clipboardWatch.checked = c.clipboard_watch === true;
