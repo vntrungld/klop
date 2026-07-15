@@ -87,6 +87,32 @@ def test_copy_to_clipboard_false_when_no_tool(tmp_path, monkeypatch):
     assert webfetch.copy_image_to_clipboard(img) is False
 
 
+def test_rejects_non_http_redirect_target(tmp_path):
+    data = _png_bytes(tmp_path)
+    with pytest.raises(ValueError, match="redirect scheme"):
+        webfetch.download_image("https://ex.com/pic.png", dest_dir=tmp_path,
+                                fetcher=lambda u, t: (data, "ftp://evil/pic.png"))
+
+
+def test_default_fetcher_cap_is_enforced_end_to_end(tmp_path, monkeypatch):
+    import io
+    payload = b"x" * 100
+
+    class _Resp(io.BytesIO):
+        def geturl(self):
+            return "https://ex.com/big.png"
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(webfetch.urllib.request, "urlopen",
+                        lambda req, timeout: _Resp(payload))
+    # max_bytes below the payload -> default fetcher reads cap+1, download_image rejects
+    with pytest.raises(ValueError, match="too large"):
+        webfetch.download_image("https://ex.com/big.png", dest_dir=tmp_path, max_bytes=10)
+
+
 def test_urllib_fetch_reads_only_up_to_cap(monkeypatch):
     import io
     payload = b"x" * 100

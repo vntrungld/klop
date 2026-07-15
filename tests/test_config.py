@@ -126,3 +126,10 @@ def test_toml_serializes_string_with_quotes(tmp_path):
     path = tmp_path / "config.toml"
     save_config(cfg, path)
     assert load_config(path).web_drop_dir == '~/we"ird'
+
+
+def test_toml_serializes_string_with_backslash(tmp_path):
+    cfg = Config(web_drop_dir=r"~/we\ird\path")
+    path = tmp_path / "config.toml"
+    save_config(cfg, path)
+    assert load_config(path).web_drop_dir == r"~/we\ird\path"

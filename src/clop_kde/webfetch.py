@@ -86,6 +86,8 @@ def download_image(
         raise ValueError(f"unsupported URL scheme: {scheme or '(none)'}")
     fetch = fetcher or (lambda u, t: _urllib_fetch(u, t, max_bytes))
     content, final_url = fetch(url, timeout)
+    if urlparse(final_url or url).scheme.lower() not in ("http", "https"):
+        raise ValueError(f"unsupported redirect scheme: {urlparse(final_url).scheme}")
     if len(content) > max_bytes:
         raise ValueError("image too large")
     mtype = _detect_by_magic(content[:32])

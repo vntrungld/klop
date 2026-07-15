@@ -123,7 +123,7 @@ PlasmoidItem {
                     }
                 }
                 if (!urls.length && drop.hasText) {
-                    var t = drop.text.split(/\s+/)[0];
+                    var t = drop.text.trim().split(/\s+/)[0];
                     if (t.indexOf("http://") === 0 || t.indexOf("https://") === 0)
                         remotes.push(t);
                 }
