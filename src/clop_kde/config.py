@@ -12,6 +12,12 @@ class Config:
     png_lossy: bool = True
     pngquant_quality: tuple[int, int] = (65, 80)
     jpeg_max_quality: int = 80
+    webp_quality: int = 80
+    gif_lossy: int = 0                 # 0 = lossless (-O3 only)
+    pdf_setting: str = "ebook"         # screen | ebook | printer | prepress
+    video_crf: int = 28
+    video_codec: str = "libx264"
+    video_preset: str = "medium"
     min_bytes_saved: int = 1
     concurrency: int = 2
     backup_retention_days: int = 7
