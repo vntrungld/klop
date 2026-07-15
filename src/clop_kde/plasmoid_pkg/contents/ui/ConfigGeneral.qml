@@ -5,10 +5,12 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasma5support as P5Support
 import "../code/backend.js" as Backend
 
-Kirigami.FormLayout {
+ColumnLayout {
     id: page
 
     property bool loaded: false
+
+    spacing: Kirigami.Units.largeSpacing
 
     P5Support.DataSource {
         id: exec
@@ -23,43 +25,65 @@ Kirigami.FormLayout {
         function run(cmd, cb) { callbacks[cmd] = cb; connectSource(cmd); }
     }
 
-    QQC2.CheckBox {
-        id: pngLossy
-        Kirigami.FormData.label: "PNG lossy:"
-        text: "Quantize PNGs (pngquant)"
-    }
-    RowLayout {
-        Kirigami.FormData.label: "pngquant quality:"
-        QQC2.SpinBox { id: pngMin; from: 0; to: 100 }
-        QQC2.Label { text: "→" }
-        QQC2.SpinBox { id: pngMax; from: 0; to: 100 }
-    }
-    QQC2.SpinBox {
-        id: jpegMax
-        Kirigami.FormData.label: "JPEG max quality:"
-        from: 1; to: 100
-    }
-    QQC2.SpinBox {
-        id: minSaved
-        Kirigami.FormData.label: "Min bytes saved:"
-        from: 0; to: 1000000
-    }
-    QQC2.SpinBox {
-        id: concurrency
-        Kirigami.FormData.label: "Concurrency:"
-        from: 1; to: 16
-    }
-    QQC2.CheckBox {
-        id: clipboardWatch
-        Kirigami.FormData.label: "Clipboard:"
-        text: "Auto-optimize copied images"
+    // Big left-aligned page title, KDE settings style. gridUnit margins around
+    // the content match the padding of a standard KDE settings page.
+    Kirigami.Heading {
+        Layout.fillWidth: true
+        Layout.topMargin: Kirigami.Units.largeSpacing * 1.5 - 1
+        Layout.leftMargin: Kirigami.Units.gridUnit
+        Layout.rightMargin: Kirigami.Units.gridUnit
+        level: 1
+        // Bump past the level-1 size for a large KDE-style page title.
+        font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.35
+        text: "Image optimization"
     }
 
-    QQC2.Label {
-        id: errorLabel
-        visible: text !== ""
-        color: Kirigami.Theme.negativeTextColor
+    Kirigami.FormLayout {
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.gridUnit
+        Layout.rightMargin: Kirigami.Units.gridUnit
+
+        QQC2.CheckBox {
+            id: pngLossy
+            Kirigami.FormData.label: "PNG lossy:"
+            text: "Quantize PNGs (pngquant)"
+        }
+        RowLayout {
+            Kirigami.FormData.label: "pngquant quality:"
+            QQC2.SpinBox { id: pngMin; from: 0; to: 100 }
+            QQC2.Label { text: "→" }
+            QQC2.SpinBox { id: pngMax; from: 0; to: 100 }
+        }
+        QQC2.SpinBox {
+            id: jpegMax
+            Kirigami.FormData.label: "JPEG max quality:"
+            from: 1; to: 100
+        }
+        QQC2.SpinBox {
+            id: minSaved
+            Kirigami.FormData.label: "Min bytes saved:"
+            from: 0; to: 1000000
+        }
+        QQC2.SpinBox {
+            id: concurrency
+            Kirigami.FormData.label: "Concurrency:"
+            from: 1; to: 16
+        }
+        QQC2.CheckBox {
+            id: clipboardWatch
+            Kirigami.FormData.label: "Clipboard:"
+            text: "Auto-optimize copied images"
+        }
+
+        QQC2.Label {
+            id: errorLabel
+            visible: text !== ""
+            color: Kirigami.Theme.negativeTextColor
+        }
     }
+
+    // Soak up leftover space so the form stays pinned to the top.
+    Item { Layout.fillHeight: true }
 
     function shquote(s) {
         return "'" + String(s).replace(/'/g, "'\\''") + "'";

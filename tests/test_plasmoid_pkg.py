@@ -24,6 +24,22 @@ def test_full_representation_lists_history_and_undo():
     assert "savedTotal" in full            # header shows the running total
 
 
+def test_full_representation_has_progress_and_row_actions():
+    full = (PKG / "contents" / "ui" / "FullRepresentation.qml").read_text()
+    assert "pendingCount" in full          # indeterminate progress while jobs run
+    assert "ProgressBar" in full
+    assert "openImage" in full             # open image / folder / copy buttons
+    assert "openFolder" in full
+    assert "copyImage" in full
+
+
+def test_main_qml_maps_path_and_tracks_pending():
+    main = (PKG / "contents" / "ui" / "main.qml").read_text()
+    assert "pendingCount" in main          # in-flight job counter
+    assert "path: r.path" in main          # file path surfaced to the model
+    assert '" copy "' in main              # copy button invokes the new CLI verb
+
+
 def test_config_page_is_registered_and_calls_cli():
     cfgqml = (PKG / "contents" / "config" / "config.qml").read_text()
     assert "ConfigGeneral.qml" in cfgqml
@@ -33,6 +49,8 @@ def test_config_page_is_registered_and_calls_cli():
     for field in ("png_lossy", "pngquant_quality", "jpeg_max_quality",
                   "min_bytes_saved", "concurrency", "clipboard_watch"):
         assert field in form
+    assert "Kirigami.Heading" in form    # big left-aligned page title, KDE style
+    assert "Image optimization" in form
 
 
 def test_main_qml_routes_web_urls_to_optimize_url():
