@@ -33,3 +33,11 @@ def test_config_page_is_registered_and_calls_cli():
     for field in ("png_lossy", "pngquant_quality", "jpeg_max_quality",
                   "min_bytes_saved", "concurrency", "clipboard_watch"):
         assert field in form
+
+
+def test_main_qml_routes_web_urls_to_optimize_url():
+    main = (PKG / "contents" / "ui" / "main.qml").read_text()
+    assert "optimizeUrls" in main            # new remote-URL handler
+    assert "optimize-url" in main            # invokes the new CLI verb
+    assert "https://" in main                # classifies remote drops
+    assert "drop.hasText" in main            # accepts text-only browser drags
