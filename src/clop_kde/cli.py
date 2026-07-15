@@ -95,14 +95,14 @@ def _cmd_optimize(args) -> int:
         result = engine.optimize(OptimizationJob(source_path=path))
         if result.status == JobStatus.OPTIMIZED:
             print(
-                f"optimized {path.name}: "
+                f"optimized {result.path.name}: "
                 f"{human_size(result.original_size)} -> {human_size(result.new_size)} "
                 f"(saved {human_size(result.saved_bytes)}, undo id {result.backup_id})"
             )
             history.record(
                 "file",
-                path.name,
-                str(path),
+                result.path.name,
+                str(result.path),
                 result.original_size,
                 result.new_size,
                 result.backup_id,
@@ -222,16 +222,16 @@ def _cmd_optimize_url(args) -> int:
     engine = _build_engine()
     history = HistoryStore()
     result = engine.optimize(OptimizationJob(source_path=path))
-    copied = webfetch.copy_image_to_clipboard(path)
+    copied = webfetch.copy_image_to_clipboard(result.path)
 
     if result.status == JobStatus.OPTIMIZED:
         print(
-            f"optimized {path.name}: "
+            f"optimized {result.path.name}: "
             f"{human_size(result.original_size)} -> {human_size(result.new_size)} "
             f"(saved {human_size(result.saved_bytes)}, undo id {result.backup_id})"
         )
         history.record(
-            "file", path.name, str(path),
+            "file", result.path.name, str(result.path),
             result.original_size, result.new_size, result.backup_id,
         )
     elif result.status == JobStatus.ERROR:
@@ -240,16 +240,16 @@ def _cmd_optimize_url(args) -> int:
     else:
         print(f"{result.status.value} {path.name}: {result.message}")
 
-    print(f"saved {path}")
+    print(f"saved {result.path}")
 
     if not sys.stdout.isatty():
         if result.status == JobStatus.OPTIMIZED:
             pct = percent_saved(result.original_size, result.new_size)
-            summary = path.name
+            summary = result.path.name
             body = f"{human_size(result.original_size)} → {human_size(result.new_size)} (-{pct}%)"
         else:
             summary = "Klop"
-            body = f"Saved {path.name}"
+            body = f"Saved {result.path.name}"
         body += f"\nSaved to {dest_dir}" + (" · copied" if copied else "")
         send_notification(summary, body, icon=_notify_icon())
     return 0
