@@ -49,6 +49,14 @@ PlasmoidItem {
         });
     }
 
+    function optimizeUrls(urls) {
+        for (var i = 0; i < urls.length; i++) {
+            exec.run(shquote(Backend.CLOP_BIN) + " optimize-url " + shquote(urls[i]), function (code, out, err) {
+                refreshHistory();
+            });
+        }
+    }
+
     function refreshHistory() {
         exec.run(shquote(Backend.CLOP_BIN) + " history --json", function (code, out, err) {
             if (code !== 0)
@@ -97,20 +105,32 @@ PlasmoidItem {
             id: dropArea
             anchors.fill: parent
             onEntered: (drag) => {
-                if (drag.hasUrls)
+                if (drag.hasUrls || drag.hasText)
                     drag.accepted = true;
             }
             onDropped: (drop) => {
-                var paths = [];
-                for (var i = 0; i < drop.urls.length; i++) {
-                    var raw = drop.urls[i].toString();
-                    var u;
-                    try { u = decodeURIComponent(raw); } catch (e) { u = raw; }
-                    if (u.indexOf("file://") === 0)
-                        paths.push(u.substring("file://".length));
+                var locals = [];
+                var remotes = [];
+                var urls = drop.hasUrls ? drop.urls : [];
+                for (var i = 0; i < urls.length; i++) {
+                    var raw = urls[i].toString();
+                    if (raw.indexOf("http://") === 0 || raw.indexOf("https://") === 0) {
+                        remotes.push(raw);  // keep the URL encoded for fetching
+                    } else if (raw.indexOf("file://") === 0) {
+                        var u;
+                        try { u = decodeURIComponent(raw); } catch (e) { u = raw; }
+                        locals.push(u.substring("file://".length));
+                    }
                 }
-                if (paths.length)
-                    root.optimizePaths(paths);
+                if (!urls.length && drop.hasText) {
+                    var t = drop.text.trim().split(/\s+/)[0];
+                    if (t.indexOf("http://") === 0 || t.indexOf("https://") === 0)
+                        remotes.push(t);
+                }
+                if (locals.length)
+                    root.optimizePaths(locals);
+                if (remotes.length)
+                    root.optimizeUrls(remotes);
             }
         }
         MouseArea {

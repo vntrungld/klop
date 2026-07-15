@@ -336,3 +336,57 @@ def test_config_set_bad_assignment_errors(capsys):
     rc = main(["config", "set", "png_lossy"])  # missing '='
     assert rc == 2
     assert "key=value" in capsys.readouterr().err
+
+
+def test_optimize_url_downloads_optimizes_records_and_prints_path(
+    tmp_path, capsys, monkeypatch, sample_png
+):
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
+    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    dest = tmp_path / "webdrop"
+    dest.mkdir()
+
+    import clop_kde.cli as cli_mod
+    from clop_kde.config import Config
+    from clop_kde.job import JobResult, JobStatus
+
+    # cli.py binds `load_config` by name, so patch it on the cli module.
+    monkeypatch.setattr(cli_mod, "load_config", lambda path=None: Config(web_drop_dir=str(dest)))
+
+    saved = dest / "pic.png"
+
+    def fake_download(url, *, dest_dir, **kw):
+        saved.write_bytes(sample_png.read_bytes())
+        return saved
+
+    monkeypatch.setattr(cli_mod.webfetch, "download_image", fake_download)
+    monkeypatch.setattr(cli_mod.webfetch, "copy_image_to_clipboard", lambda p: True)
+
+    class _Eng:
+        def optimize(self, job):
+            return JobResult(JobStatus.OPTIMIZED, job.source_path, 1000, 400, backup_id="B1")
+
+    monkeypatch.setattr(cli_mod, "_build_engine", lambda: _Eng())
+    monkeypatch.setattr(cli_mod.sys.stdout, "isatty", lambda: True)  # suppress notification
+
+    rc = main(["optimize-url", "https://ex.com/pic.png"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert str(saved) in out  # prints the saved path
+
+    from clop_kde.history import HistoryStore
+    entries = HistoryStore().entries()
+    assert len(entries) == 1 and entries[0].backup_id == "B1"
+
+
+def test_optimize_url_bad_url_exits_1(capsys, monkeypatch):
+    import clop_kde.cli as cli_mod
+
+    def boom(url, *, dest_dir, **kw):
+        raise ValueError("unsupported URL scheme: ftp")
+
+    monkeypatch.setattr(cli_mod.webfetch, "download_image", boom)
+    monkeypatch.setattr(cli_mod.sys.stdout, "isatty", lambda: True)
+    rc = main(["optimize-url", "ftp://ex.com/x"])
+    assert rc == 1
+    assert "scheme" in capsys.readouterr().err

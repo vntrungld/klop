@@ -37,6 +37,10 @@ drops call `optimize-url`.
 - No new Python package dependency (uses stdlib `urllib`). The clipboard tool (`wl-copy` /
   `xclip`) is an optional, detected external CLI — absence degrades to "saved, not copied".
 - No change to how local-file drops behave.
+- No SSRF protection on the fetched host: a user-dragged URL pointing at a local/metadata address
+  (e.g. `http://localhost`, `http://169.254.169.254`) is fetched verbatim. Accepted risk — the
+  fetch is user-initiated on a desktop app, http/https-only, size-capped, and image-validated.
+  (Redirects to non-http(s) schemes are rejected.)
 
 ## Architecture
 

@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 
+from . import webfetch
 from .backup import BackupStore
 from .capabilities import KNOWN_TOOLS, detect_capabilities
 from .config import apply_overrides, config_to_dict, load_config, save_config
@@ -208,6 +209,52 @@ def _cmd_install_plasmoid(_args) -> int:
     return 0
 
 
+def _cmd_optimize_url(args) -> int:
+    dest_dir = Path(load_config().web_drop_dir).expanduser()
+    try:
+        path = webfetch.download_image(args.url, dest_dir=dest_dir)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        if not sys.stdout.isatty():
+            send_notification("Klop", f"Could not fetch image: {exc}", icon=_notify_icon())
+        return 1
+
+    engine = _build_engine()
+    history = HistoryStore()
+    result = engine.optimize(OptimizationJob(source_path=path))
+    copied = webfetch.copy_image_to_clipboard(path)
+
+    if result.status == JobStatus.OPTIMIZED:
+        print(
+            f"optimized {path.name}: "
+            f"{human_size(result.original_size)} -> {human_size(result.new_size)} "
+            f"(saved {human_size(result.saved_bytes)}, undo id {result.backup_id})"
+        )
+        history.record(
+            "file", path.name, str(path),
+            result.original_size, result.new_size, result.backup_id,
+        )
+    elif result.status == JobStatus.ERROR:
+        print(f"error {path.name}: {result.message}", file=sys.stderr)
+        return 1
+    else:
+        print(f"{result.status.value} {path.name}: {result.message}")
+
+    print(f"saved {path}")
+
+    if not sys.stdout.isatty():
+        if result.status == JobStatus.OPTIMIZED:
+            pct = percent_saved(result.original_size, result.new_size)
+            summary = path.name
+            body = f"{human_size(result.original_size)} → {human_size(result.new_size)} (-{pct}%)"
+        else:
+            summary = "Klop"
+            body = f"Saved {path.name}"
+        body += f"\nSaved to {dest_dir}" + (" · copied" if copied else "")
+        send_notification(summary, body, icon=_notify_icon())
+    return 0
+
+
 def _cmd_daemon(_args) -> int:
     from .daemon import run_daemon  # lazy: keeps Qt out of the headless CLI import path
 
@@ -221,6 +268,10 @@ def main(argv: list[str] | None = None) -> int:
     p_opt = sub.add_parser("optimize", help="optimize one or more files")
     p_opt.add_argument("files", nargs="+")
     p_opt.set_defaults(func=_cmd_optimize)
+
+    p_opturl = sub.add_parser("optimize-url", help="download, optimize, save, and copy an image URL")
+    p_opturl.add_argument("url")
+    p_opturl.set_defaults(func=_cmd_optimize_url)
 
     p_undo = sub.add_parser("undo", help="restore a backed-up original")
     p_undo.add_argument("backup_id")
