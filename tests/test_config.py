@@ -133,3 +133,31 @@ def test_toml_serializes_string_with_backslash(tmp_path):
     path = tmp_path / "config.toml"
     save_config(cfg, path)
     assert load_config(path).web_drop_dir == r"~/we\ird\path"
+
+
+def test_new_optimizer_knobs_have_defaults():
+    from clop_kde.config import Config
+    c = Config()
+    assert c.webp_quality == 80
+    assert c.gif_lossy == 0
+    assert c.pdf_setting == "ebook"
+    assert c.video_crf == 28
+    assert c.video_codec == "libx264"
+    assert c.video_preset == "medium"
+
+
+def test_new_knobs_round_trip_through_toml(tmp_path):
+    from clop_kde.config import Config, save_config, load_config
+    path = tmp_path / "config.toml"
+    save_config(Config(webp_quality=70, video_crf=30, pdf_setting="screen"), path)
+    loaded = load_config(path)
+    assert loaded.webp_quality == 70
+    assert loaded.video_crf == 30
+    assert loaded.pdf_setting == "screen"
+
+
+def test_new_knobs_apply_overrides():
+    from clop_kde.config import Config, apply_overrides
+    c = apply_overrides(Config(), {"video_crf": "23", "video_codec": "libx265"})
+    assert c.video_crf == 23
+    assert c.video_codec == "libx265"

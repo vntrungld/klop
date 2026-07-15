@@ -175,6 +175,68 @@ def test_optimize_preserves_source_permissions(tmp_path):
     assert stat.S_IMODE(os.stat(f).st_mode) == 0o644
 
 
+def test_convert_writes_new_extension_and_drops_source(tmp_path):
+    src = tmp_path / "clip.mkv"
+    src.write_bytes(b"\x1a\x45\xdf\xa3" + b"x" * 5000)  # EBML magic → VIDEO
+
+    def runner(cmd, stdout_path):
+        out = Path(cmd[-1])                    # ffmpeg output is the last arg
+        assert out.suffix == ".mp4"
+        out.write_bytes(b"\x00" * 500)
+        return 0
+
+    engine = make_engine(tmp_path, {"ffmpeg": "/usr/bin/ffmpeg"}, runner)
+    result = engine.optimize(OptimizationJob(source_path=src))
+
+    assert result.status == JobStatus.OPTIMIZED
+    dest = tmp_path / "clip.mp4"
+    assert result.path == dest
+    assert dest.exists()
+    assert not src.exists()                    # original converted away
+    assert result.backup_id is not None
+
+    # Undo restores the original .mkv at its original path.
+    restored = engine.undo(result.backup_id)
+    assert restored == src
+    assert src.exists()
+    assert len(src.read_bytes()) == 5004
+
+
+def test_convert_dedups_when_dest_exists(tmp_path):
+    src = tmp_path / "clip.mkv"
+    src.write_bytes(b"\x1a\x45\xdf\xa3" + b"x" * 5000)
+    taken = tmp_path / "clip.mp4"
+    taken.write_bytes(b"unrelated")            # pre-existing, must not be clobbered
+
+    def runner(cmd, stdout_path):
+        Path(cmd[-1]).write_bytes(b"\x00" * 500)
+        return 0
+
+    engine = make_engine(tmp_path, {"ffmpeg": "/usr/bin/ffmpeg"}, runner)
+    result = engine.optimize(OptimizationJob(source_path=src))
+
+    assert result.status == JobStatus.OPTIMIZED
+    assert result.path == tmp_path / "clip-1.mp4"
+    assert taken.read_bytes() == b"unrelated"  # untouched
+
+
+def test_convert_unchanged_when_not_smaller_keeps_source(tmp_path):
+    src = tmp_path / "clip.mkv"
+    src.write_bytes(b"\x1a\x45\xdf\xa3" + b"x" * 100)
+
+    def runner(cmd, stdout_path):
+        Path(cmd[-1]).write_bytes(b"\x00" * 5000)   # bigger than original
+        return 0
+
+    engine = make_engine(tmp_path, {"ffmpeg": "/usr/bin/ffmpeg"}, runner)
+    result = engine.optimize(OptimizationJob(source_path=src))
+
+    assert result.status == JobStatus.UNCHANGED
+    assert src.exists()                        # original kept
+    assert not (tmp_path / "clip.mp4").exists()  # no converted file left behind
+    assert result.backup_id is None
+
+
 def test_optimize_returns_error_on_replace_failure(tmp_path, monkeypatch):
     f = tmp_path / "a.png"
     original_bytes = b"\x89PNG\r\n\x1a\n" + b"x" * 1000

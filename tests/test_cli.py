@@ -272,6 +272,44 @@ def test_optimize_records_file_history(tmp_path, monkeypatch):
     assert rows[0].backup_id == "bid1"
 
 
+def test_optimize_convert_uses_result_path_not_deleted_source(tmp_path, capsys, monkeypatch):
+    # On a format conversion (e.g. clip.mkv -> clip.mp4) the engine deletes the
+    # original source and returns JobResult.path pointing at the new file. The
+    # CLI must report and record that new path, not the stale (now-deleted)
+    # source path.
+    from clop_kde import cli as cli_mod
+    from clop_kde.job import JobResult, JobStatus
+
+    hist = tmp_path / "history.jsonl"
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+
+    src = tmp_path / "clip.mkv"
+    src.write_bytes(b"x" * 100)
+    converted = tmp_path / "clip.mp4"
+    converted.write_bytes(b"x" * 40)
+    # The real engine deletes the source as part of the convert; the fake
+    # engine below stands in for that, so `src` need not survive here beyond
+    # the CLI's initial existence check.
+
+    class _Eng:
+        def optimize(self, job):
+            return JobResult(JobStatus.OPTIMIZED, converted, 1000, 400, backup_id="B1")
+
+    monkeypatch.setattr(cli_mod, "_build_engine", lambda: _Eng())
+
+    rc = main(["optimize", str(src)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "optimized clip.mp4" in out
+    assert "clip.mkv" not in out
+
+    rows = HistoryStore(hist).entries()
+    assert len(rows) == 1
+    assert rows[0].name == "clip.mp4"
+    assert rows[0].path == str(converted)
+
+
 def test_undo_marks_history_undone(tmp_path, monkeypatch):
     from clop_kde.backup import BackupStore
     from clop_kde.cli import main
@@ -403,6 +441,68 @@ def test_optimize_url_downloads_optimizes_records_and_prints_path(
     from clop_kde.history import HistoryStore
     entries = HistoryStore().entries()
     assert len(entries) == 1 and entries[0].backup_id == "B1"
+
+
+def test_optimize_url_convert_uses_result_path_not_deleted_source(
+    tmp_path, capsys, monkeypatch, sample_png
+):
+    # On a HEIC -> jpg convert the engine deletes the downloaded original and
+    # returns JobResult.path pointing at the new .jpg. The clipboard copy,
+    # history record, "saved" message, and notification must all reference
+    # that new path, not the deleted download.
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
+    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    dest = tmp_path / "webdrop"
+    dest.mkdir()
+
+    import clop_kde.cli as cli_mod
+    from clop_kde.config import Config
+    from clop_kde.job import JobResult, JobStatus
+
+    monkeypatch.setattr(cli_mod, "load_config", lambda path=None: Config(web_drop_dir=str(dest)))
+
+    downloaded = dest / "pic.heic"
+    converted = dest / "pic.jpg"
+
+    def fake_download(url, *, dest_dir, **kw):
+        downloaded.write_bytes(sample_png.read_bytes())
+        return downloaded
+
+    monkeypatch.setattr(cli_mod.webfetch, "download_image", fake_download)
+
+    clipboard_calls = []
+    monkeypatch.setattr(
+        cli_mod.webfetch,
+        "copy_image_to_clipboard",
+        lambda p: clipboard_calls.append(Path(p)) or True,
+    )
+
+    class _Eng:
+        def optimize(self, job):
+            converted.write_bytes(sample_png.read_bytes())
+            downloaded.unlink()  # engine deletes the HEIC original on convert
+            return JobResult(JobStatus.OPTIMIZED, converted, 1000, 400, backup_id="B1")
+
+    monkeypatch.setattr(cli_mod, "_build_engine", lambda: _Eng())
+    monkeypatch.setattr(cli_mod.sys.stdout, "isatty", lambda: True)  # suppress notification
+
+    rc = main(["optimize-url", "https://ex.com/pic.heic"])
+    out = capsys.readouterr().out
+    assert rc == 0
+
+    # Clipboard copy must target the converted .jpg, not the deleted .heic.
+    assert clipboard_calls == [converted]
+
+    # Printed output references the new path/name only.
+    assert "optimized pic.jpg" in out
+    assert str(converted) in out
+    assert "pic.heic" not in out
+
+    entries = HistoryStore().entries()
+    assert len(entries) == 1
+    assert entries[0].name == "pic.jpg"
+    assert entries[0].path == str(converted)
+    assert entries[0].backup_id == "B1"
 
 
 def test_optimize_url_bad_url_exits_1(capsys, monkeypatch):
