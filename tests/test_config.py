@@ -101,3 +101,28 @@ def test_clipboard_watch_can_be_disabled(tmp_path):
     p = tmp_path / "config.toml"
     p.write_text("clipboard_watch = false\n")
     assert load_config(p).clipboard_watch is False
+
+
+def test_web_drop_dir_defaults_and_round_trips(tmp_path):
+    assert Config().web_drop_dir == "~/Pictures/Klop"
+    cfg = Config(web_drop_dir="~/Downloads/opt")
+    path = tmp_path / "config.toml"
+    save_config(cfg, path)
+    assert load_config(path).web_drop_dir == "~/Downloads/opt"
+
+
+def test_apply_overrides_coerces_string_field():
+    cfg = apply_overrides(Config(), {"web_drop_dir": "/tmp/klop out"})
+    assert cfg.web_drop_dir == "/tmp/klop out"  # spaces preserved verbatim
+
+
+def test_config_to_dict_includes_web_drop_dir():
+    assert config_to_dict(Config())["web_drop_dir"] == "~/Pictures/Klop"
+
+
+def test_toml_serializes_string_with_quotes(tmp_path):
+    # a value containing a double-quote must round-trip through TOML
+    cfg = Config(web_drop_dir='~/we"ird')
+    path = tmp_path / "config.toml"
+    save_config(cfg, path)
+    assert load_config(path).web_drop_dir == '~/we"ird'

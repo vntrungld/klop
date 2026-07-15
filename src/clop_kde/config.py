@@ -17,6 +17,7 @@ class Config:
     backup_retention_days: int = 7
     backup_max_bytes: int = 500 * 1024 * 1024
     clipboard_watch: bool = True
+    web_drop_dir: str = "~/Pictures/Klop"
 
 
 def default_config_path() -> Path:
@@ -66,6 +67,8 @@ def _coerce_like(current, key: str, raw: str):
         if v in _BOOL_FALSE:
             return False
         raise ValueError(f"invalid boolean for {key}: {raw!r}")
+    if isinstance(current, str):
+        return raw
     if isinstance(current, tuple):
         parts = [p.strip() for p in raw.split(",")]
         if len(parts) != 2:
@@ -96,6 +99,9 @@ def _toml_value(value) -> str:
         return "true" if value else "false"
     if isinstance(value, tuple):
         return "[" + ", ".join(str(x) for x in value) + "]"
+    if isinstance(value, str):
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
     if isinstance(value, int):
         return str(value)
     raise TypeError(f"cannot serialize {value!r} to TOML")
