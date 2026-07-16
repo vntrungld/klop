@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = ["PySide6>=6.6"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "Pillow>=10"]
+dev = ["pytest>=8", "Pillow>=10", "ruff>=0.9"]
 
 [project.scripts]
 clop-kde = "clop_kde.cli:main"
@@ -24,3 +24,12 @@ packages = ["src/clop_kde"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
