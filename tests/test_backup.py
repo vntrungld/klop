@@ -92,3 +92,66 @@ def test_backup_same_path_twice_does_not_clobber(tmp_path):
 
     restored2 = store.restore(id2)
     assert restored2.read_bytes() == b"V2"
+
+
+def test_restore_removes_recorded_converted_file(tmp_path):
+    # A convert leaves a new file behind (clip.mkv -> clip.mp4). Undo must
+    # restore the original AND remove the converted file it created.
+    src = tmp_path / "clip.mkv"
+    src.write_bytes(b"original" * 10)
+    store = BackupStore(tmp_path / "backups")
+    backup_id = store.backup(src)
+
+    dest = tmp_path / "clip.mp4"
+    dest.write_bytes(b"converted")
+    src.unlink()
+    store.record_conversion(backup_id, dest, dest.stat().st_size)
+
+    restored = store.restore(backup_id)
+    assert restored == src
+    assert src.read_bytes() == b"original" * 10
+    assert not dest.exists()
+
+
+def test_restore_keeps_converted_file_if_modified(tmp_path):
+    # If the user changed the converted file after we made it, it is their
+    # work now — never delete it.
+    src = tmp_path / "clip.mkv"
+    src.write_bytes(b"original")
+    store = BackupStore(tmp_path / "backups")
+    backup_id = store.backup(src)
+
+    dest = tmp_path / "clip.mp4"
+    dest.write_bytes(b"converted")
+    store.record_conversion(backup_id, dest, dest.stat().st_size)
+    dest.write_bytes(b"user edited this file later")  # size no longer matches
+
+    store.restore(backup_id)
+    assert dest.exists()
+    assert dest.read_bytes() == b"user edited this file later"
+
+
+def test_restore_tolerates_already_deleted_converted_file(tmp_path):
+    src = tmp_path / "clip.mkv"
+    src.write_bytes(b"original")
+    store = BackupStore(tmp_path / "backups")
+    backup_id = store.backup(src)
+
+    dest = tmp_path / "clip.mp4"
+    dest.write_bytes(b"converted")
+    store.record_conversion(backup_id, dest, dest.stat().st_size)
+    dest.unlink()  # user already removed it
+
+    assert store.restore(backup_id) == src
+
+
+def test_restore_works_for_backups_without_conversion_metadata(tmp_path):
+    # Backup slots written before this feature have no converted_path key.
+    src = tmp_path / "a.png"
+    src.write_bytes(b"data")
+    store = BackupStore(tmp_path / "backups")
+    backup_id = store.backup(src)
+    src.write_bytes(b"optimized")
+
+    assert store.restore(backup_id) == src
+    assert src.read_bytes() == b"data"
