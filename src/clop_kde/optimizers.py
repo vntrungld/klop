@@ -14,7 +14,7 @@ class Optimizer:
     tool: str
     _builder: Callable[[Path, Path, Config], list[str]]
     use_stdout: bool = False
-    output_ext: str | None = None   # None = keep source suffix; ".jpg"/".mp4" = convert
+    output_ext: str | None = None  # None = keep source suffix; ".jpg"/".mp4" = convert
 
     def build_command(self, inp: Path, out: Path, cfg: Config) -> list[str]:
         return self._builder(inp, out, cfg)
@@ -98,10 +98,6 @@ def _ffmpeg_cmd(inp: Path, out: Path, cfg: Config) -> list[str]:
     ]
 
 
-def _vips_heic_cmd(inp: Path, out: Path, cfg: Config) -> list[str]:
-    return ["vips", "copy", str(inp), f"{out}[Q={cfg.jpeg_max_quality},strip]"]
-
-
 PNGQUANT = Optimizer("pngquant", "pngquant", _pngquant_cmd, use_stdout=False)
 JPEGOPTIM = Optimizer("jpegoptim", "jpegoptim", _jpegoptim_cmd, use_stdout=True)
 GIFSICLE = Optimizer("gifsicle", "gifsicle", _gifsicle_cmd, use_stdout=False)
@@ -109,7 +105,6 @@ CWEBP = Optimizer("cwebp", "cwebp", _cwebp_cmd, use_stdout=False)
 VIPS_WEBP = Optimizer("vips", "vips", _vips_webp_cmd, use_stdout=False)
 GS = Optimizer("gs", "gs", _gs_cmd, use_stdout=False)
 FFMPEG = Optimizer("ffmpeg", "ffmpeg", _ffmpeg_cmd, use_stdout=False, output_ext=".mp4")
-VIPS_HEIC = Optimizer("vips", "vips", _vips_heic_cmd, use_stdout=False, output_ext=".jpg")
 
 # First available optimizer per media type wins.
 _REGISTRY: dict[MediaType, list[Optimizer]] = {
@@ -119,8 +114,16 @@ _REGISTRY: dict[MediaType, list[Optimizer]] = {
     MediaType.WEBP: [CWEBP, VIPS_WEBP],
     MediaType.PDF: [GS],
     MediaType.VIDEO: [FFMPEG],
-    MediaType.HEIC: [VIPS_HEIC],
 }
+# MediaType.HEIC is intentionally absent. HEIC is already an efficient codec,
+# so there is no size win to take: converting to JPEG always inflates
+# (measured 9KB->29KB and 114KB->181KB), and re-encoding HEIC->HEIC only
+# shrinks when the chosen Q is below the source's — which we cannot know
+# (Q=80 tripled a Q=50 source). The engine's smaller-only gate would reject
+# every result, so an entry here would be dead code. `.heic` still detects
+# as MediaType.HEIC and reports "no optimizer available for heic".
+# Converting HEIC for *compatibility* is a separate, explicitly-invoked
+# feature — not an auto-optimize path.
 
 
 def select_optimizer(
