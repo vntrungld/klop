@@ -258,3 +258,55 @@ def test_optimize_returns_error_on_replace_failure(tmp_path, monkeypatch):
     assert result.status == JobStatus.ERROR
     assert "simulated ENOSPC" in result.message
     assert f.read_bytes() == original_bytes
+
+
+def test_convert_undo_removes_the_converted_file(tmp_path):
+    # Undoing a convert must leave the directory as it was: original back,
+    # converted file gone (not orphaned alongside it).
+    src = tmp_path / "clip.mkv"
+    src.write_bytes(b"\x1a\x45\xdf\xa3" + b"x" * 5000)
+
+    def runner(cmd, stdout_path):
+        Path(cmd[-1]).write_bytes(b"\x00" * 500)
+        return 0
+
+    engine = make_engine(tmp_path, {"ffmpeg": "/usr/bin/ffmpeg"}, runner)
+    result = engine.optimize(OptimizationJob(source_path=src))
+    dest = tmp_path / "clip.mp4"
+    assert result.status == JobStatus.OPTIMIZED and dest.exists()
+
+    engine.undo(result.backup_id)
+    assert src.exists()
+    assert not dest.exists()
+
+
+def test_convert_undo_keeps_converted_file_the_user_changed(tmp_path):
+    src = tmp_path / "clip.mkv"
+    src.write_bytes(b"\x1a\x45\xdf\xa3" + b"x" * 5000)
+
+    def runner(cmd, stdout_path):
+        Path(cmd[-1]).write_bytes(b"\x00" * 500)
+        return 0
+
+    engine = make_engine(tmp_path, {"ffmpeg": "/usr/bin/ffmpeg"}, runner)
+    result = engine.optimize(OptimizationJob(source_path=src))
+    dest = tmp_path / "clip.mp4"
+    dest.write_bytes(b"the user re-edited this clip")  # different size
+
+    engine.undo(result.backup_id)
+    assert src.exists()
+    assert dest.read_bytes() == b"the user re-edited this clip"
+
+
+def test_same_extension_undo_does_not_delete_anything(tmp_path):
+    f = tmp_path / "a.png"
+    f.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 1000)
+
+    def runner(cmd, stdout_path):
+        Path(cmd[cmd.index("--output") + 1]).write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 100)
+        return 0
+
+    engine = make_engine(tmp_path, {"pngquant": "/usr/bin/pngquant"}, runner)
+    result = engine.optimize(OptimizationJob(source_path=f))
+    engine.undo(result.backup_id)
+    assert f.exists() and len(f.read_bytes()) == 1008

@@ -44,6 +44,21 @@ class BackupStore:
         (slot / "meta.json").write_text(json.dumps(meta))
         return backup_id
 
+    def record_conversion(self, backup_id: str, dest: Path, size: int) -> None:
+        """Note that this backup's original was converted into `dest`.
+
+        Lets `restore` clean up the file the convert created. Size is stored so
+        restore can tell our own output apart from a file the user has since
+        changed.
+        """
+        meta_file = self.root / backup_id / "meta.json"
+        if not meta_file.exists():
+            raise KeyError(backup_id)
+        meta = json.loads(meta_file.read_text())
+        meta["converted_path"] = str(dest)
+        meta["converted_size"] = int(size)
+        meta_file.write_text(json.dumps(meta))
+
     def restore(self, backup_id: str) -> Path:
         slot = self.root / backup_id
         meta_file = slot / "meta.json"
@@ -53,7 +68,28 @@ class BackupStore:
         original = Path(meta["original_path"])
         original.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(slot / meta["filename"], original)
+        self._remove_converted(meta)
         return original
+
+    @staticmethod
+    def _remove_converted(meta: dict) -> None:
+        """Delete the file a convert produced, if it is still exactly ours.
+
+        Absent for same-extension optimizations and for backups written before
+        conversions were tracked. We only unlink when the size still matches
+        what we wrote: if the user edited or replaced that file, it is their
+        work and we leave it alone.
+        """
+        converted = meta.get("converted_path")
+        if not converted:
+            return
+        path = Path(converted)
+        try:
+            if path.stat().st_size != meta.get("converted_size"):
+                return
+            path.unlink()
+        except OSError:
+            pass  # already gone, or not ours to remove — never fail the undo
 
     def _slots(self) -> list[tuple[str, float, int]]:
         """Return (backup_id, created_ts, size_bytes) per slot, oldest first."""

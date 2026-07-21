@@ -59,14 +59,20 @@ class Engine:
 
             if code != 0 or not tmp.exists() or tmp.stat().st_size == 0:
                 return JobResult(
-                    JobStatus.UNCHANGED, source, original_size, original_size,
+                    JobStatus.UNCHANGED,
+                    source,
+                    original_size,
+                    original_size,
                     message="optimizer produced no smaller output",
                 )
 
             new_size = tmp.stat().st_size
             if original_size - new_size < self.config.min_bytes_saved:
                 return JobResult(
-                    JobStatus.UNCHANGED, source, original_size, new_size,
+                    JobStatus.UNCHANGED,
+                    source,
+                    original_size,
+                    new_size,
                     message="already optimal",
                 )
 
@@ -86,16 +92,27 @@ class Engine:
                         source.unlink()  # drop the now-converted original
                     except OSError:
                         pass  # dest written and backed up; leftover source is non-fatal
+                    try:
+                        # So undo can clean up the file this convert created.
+                        self.backup_store.record_conversion(backup_id, dest, new_size)
+                    except (OSError, KeyError):
+                        pass  # undo still restores the original; it just leaves dest
                 else:
                     dest = source
                     os.replace(tmp, source)  # atomic within same directory
             except OSError as e:
                 return JobResult(
-                    JobStatus.ERROR, source, original_size, original_size,
+                    JobStatus.ERROR,
+                    source,
+                    original_size,
+                    original_size,
                     message=f"failed to replace {source.name}: {e}",
                 )
             return JobResult(
-                JobStatus.OPTIMIZED, dest, original_size, new_size,
+                JobStatus.OPTIMIZED,
+                dest,
+                original_size,
+                new_size,
                 backup_id=backup_id,
             )
         finally:
