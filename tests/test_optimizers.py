@@ -4,14 +4,14 @@ from clop_kde.config import Config
 from clop_kde.media import MediaType
 from clop_kde.optimizers import (
     CWEBP,
+    FFMPEG,
     GIFSICLE,
     GS,
     JPEGOPTIM,
     PNGQUANT,
     VIPS_WEBP,
+    expected_tools,
     select_optimizer,
-    FFMPEG,
-    VIPS_HEIC,
 )
 
 
@@ -53,7 +53,7 @@ def test_gifsicle_command_shape():
     cmd = GIFSICLE.build_command(Path("/in.gif"), Path("/out.gif"), cfg)
     assert cmd[0] == "gifsicle"
     assert "-O3" in cmd
-    assert "--lossy=0" not in " ".join(cmd)   # lossless when gif_lossy == 0
+    assert "--lossy=0" not in " ".join(cmd)  # lossless when gif_lossy == 0
     assert cmd[cmd.index("-o") + 1] == "/out.gif"
     assert cmd[-1] == "/in.gif"
     assert GIFSICLE.use_stdout is False
@@ -114,18 +114,17 @@ def test_ffmpeg_command_shape_and_output_ext():
     # Re-encode audio to AAC so opus/vorbis (webm/mkv) remux into mp4 instead
     # of failing the whole convert.
     assert cmd[cmd.index("-c:a") + 1] == "aac"
-    assert cmd[-1] == "/out.mp4"          # output is the last arg
+    assert cmd[-1] == "/out.mp4"  # output is the last arg
     assert FFMPEG.output_ext == ".mp4"
 
 
-def test_vips_heic_command_shape_and_output_ext():
-    cmd = VIPS_HEIC.build_command(Path("/in.heic"), Path("/out.jpg"), Config(jpeg_max_quality=75))
-    assert cmd[0] == "vips"
-    assert cmd[1] == "copy"
-    assert cmd[2] == "/in.heic"
-    assert cmd[3].startswith("/out.jpg[")
-    assert "Q=75" in cmd[3]
-    assert VIPS_HEIC.output_ext == ".jpg"
+def test_heic_has_no_optimizer():
+    # Deliberate: HEIC is already efficient, so every conversion we could run
+    # inflates the file and the engine's smaller-only gate would reject it.
+    # See the note beside _REGISTRY. `.heic` must degrade to a clean skip.
+    caps = {"vips": "/x", "ffmpeg": "/x", "cwebp": "/x"}
+    assert select_optimizer(MediaType.HEIC, caps, Config()) is None
+    assert expected_tools(MediaType.HEIC) == []
 
 
 def test_existing_optimizers_default_output_ext_none():
@@ -136,4 +135,3 @@ def test_existing_optimizers_default_output_ext_none():
 def test_select_convert_optimizers():
     caps = {"ffmpeg": "/x", "vips": "/x"}
     assert select_optimizer(MediaType.VIDEO, caps, Config()) is FFMPEG
-    assert select_optimizer(MediaType.HEIC, caps, Config()) is VIPS_HEIC

@@ -2,8 +2,6 @@ import json as _json
 import shutil
 from pathlib import Path
 
-import pytest
-
 from clop_kde.backup import BackupStore
 from clop_kde.cli import main
 from clop_kde.config import Config
@@ -84,9 +82,7 @@ def test_optimize_does_not_notify_in_a_terminal(tmp_path, monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda name: None)
     monkeypatch.setattr(sys.stdout, "isatty", lambda: True)  # interactive terminal
     sent = []
-    monkeypatch.setattr(
-        cli_mod, "send_notification", lambda *a, **k: sent.append(1)
-    )
+    monkeypatch.setattr(cli_mod, "send_notification", lambda *a, **k: sent.append(1))
 
     f = tmp_path / "a.png"
     f.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 100)
@@ -132,7 +128,8 @@ def test_copy_puts_image_on_clipboard(tmp_path, monkeypatch):
     f.write_bytes(b"PNG")
     seen = {}
     monkeypatch.setattr(
-        cli_mod.webfetch, "copy_image_to_clipboard",
+        cli_mod.webfetch,
+        "copy_image_to_clipboard",
         lambda path: seen.setdefault("path", Path(path)) or True,
     )
     rc = main(["copy", str(f)])
@@ -371,6 +368,7 @@ def test_config_get_json_has_all_fields(capsys, monkeypatch, tmp_path):
 def test_config_set_persists_and_prints_effective(tmp_path, capsys, monkeypatch):
     cfg = tmp_path / "config.toml"
     import clop_kde.config as config_mod
+
     monkeypatch.setattr(config_mod, "default_config_path", lambda: cfg)
 
     rc = main(["config", "set", "png_lossy=false", "jpeg_max_quality=70"])
@@ -380,6 +378,7 @@ def test_config_set_persists_and_prints_effective(tmp_path, capsys, monkeypatch)
     assert printed["png_lossy"] is False and printed["jpeg_max_quality"] == 70
     # persisted so a fresh load sees it
     from clop_kde.config import load_config
+
     reloaded = load_config(cfg)
     assert reloaded.png_lossy is False and reloaded.jpeg_max_quality == 70
 
@@ -387,6 +386,7 @@ def test_config_set_persists_and_prints_effective(tmp_path, capsys, monkeypatch)
 def test_config_set_unknown_key_errors_and_leaves_file(tmp_path, capsys, monkeypatch):
     cfg = tmp_path / "config.toml"
     import clop_kde.config as config_mod
+
     monkeypatch.setattr(config_mod, "default_config_path", lambda: cfg)
 
     rc = main(["config", "set", "bogus=1"])
@@ -439,6 +439,7 @@ def test_optimize_url_downloads_optimizes_records_and_prints_path(
     assert str(saved) in out  # prints the saved path
 
     from clop_kde.history import HistoryStore
+
     entries = HistoryStore().entries()
     assert len(entries) == 1 and entries[0].backup_id == "B1"
 
@@ -446,10 +447,11 @@ def test_optimize_url_downloads_optimizes_records_and_prints_path(
 def test_optimize_url_convert_uses_result_path_not_deleted_source(
     tmp_path, capsys, monkeypatch, sample_png
 ):
-    # On a HEIC -> jpg convert the engine deletes the downloaded original and
-    # returns JobResult.path pointing at the new .jpg. The clipboard copy,
-    # history record, "saved" message, and notification must all reference
-    # that new path, not the deleted download.
+    # On a convert (here .webp -> .mp4 stand-in: any optimizer with an
+    # output_ext) the engine deletes the downloaded original and returns
+    # JobResult.path pointing at the new file. The clipboard copy, history
+    # record, "saved" message, and notification must all reference that new
+    # path, not the deleted download.
     monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
     monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
     dest = tmp_path / "webdrop"
@@ -461,8 +463,8 @@ def test_optimize_url_convert_uses_result_path_not_deleted_source(
 
     monkeypatch.setattr(cli_mod, "load_config", lambda path=None: Config(web_drop_dir=str(dest)))
 
-    downloaded = dest / "pic.heic"
-    converted = dest / "pic.jpg"
+    downloaded = dest / "pic.gif"
+    converted = dest / "pic.mp4"
 
     def fake_download(url, *, dest_dir, **kw):
         downloaded.write_bytes(sample_png.read_bytes())
@@ -480,27 +482,27 @@ def test_optimize_url_convert_uses_result_path_not_deleted_source(
     class _Eng:
         def optimize(self, job):
             converted.write_bytes(sample_png.read_bytes())
-            downloaded.unlink()  # engine deletes the HEIC original on convert
+            downloaded.unlink()  # engine deletes the original on convert
             return JobResult(JobStatus.OPTIMIZED, converted, 1000, 400, backup_id="B1")
 
     monkeypatch.setattr(cli_mod, "_build_engine", lambda: _Eng())
     monkeypatch.setattr(cli_mod.sys.stdout, "isatty", lambda: True)  # suppress notification
 
-    rc = main(["optimize-url", "https://ex.com/pic.heic"])
+    rc = main(["optimize-url", "https://ex.com/pic.gif"])
     out = capsys.readouterr().out
     assert rc == 0
 
-    # Clipboard copy must target the converted .jpg, not the deleted .heic.
+    # Clipboard copy must target the converted file, not the deleted original.
     assert clipboard_calls == [converted]
 
     # Printed output references the new path/name only.
-    assert "optimized pic.jpg" in out
+    assert "optimized pic.mp4" in out
     assert str(converted) in out
-    assert "pic.heic" not in out
+    assert "pic.gif" not in out
 
     entries = HistoryStore().entries()
     assert len(entries) == 1
-    assert entries[0].name == "pic.jpg"
+    assert entries[0].name == "pic.mp4"
     assert entries[0].path == str(converted)
     assert entries[0].backup_id == "B1"
 
