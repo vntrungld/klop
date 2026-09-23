@@ -102,3 +102,19 @@ def test_main_qml_tries_html_img_src_before_link_url():
     assert 'import "../code/drop.js" as Drop' in main
     assert "drop.html" in main
     assert "Drop.imageSrcs" in main
+
+
+def test_drop_handling_is_shared_by_panel_and_popup():
+    main = (PKG / "contents" / "ui" / "main.qml").read_text()
+    full = (PKG / "contents" / "ui" / "FullRepresentation.qml").read_text()
+    assert "function handleDrop(drop)" in main
+    assert "function acceptsDrag(drag)" in main
+    assert "controller.handleDrop(drop)" in full   # the whole popup is a drop zone
+    assert "DropArea" in full
+
+
+def test_panel_drop_target_is_wide_and_opens_popup_on_hover():
+    main = (PKG / "contents" / "ui" / "main.qml").read_text()
+    assert "Layout.minimumWidth" in main           # wider than a square icon
+    assert "PlasmaCore.Types.Vertical" in main     # but stays square in vertical panels
+    assert "hoverOpenTimer" in main                # dragging over the icon opens the popup

@@ -1,4 +1,7 @@
 import QtQuick
+import QtQuick.Layouts
+import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasma5support as P5Support
@@ -127,52 +130,95 @@ PlasmoidItem {
         });
     }
 
-    // Panel icon == drop target.
+    function humanSize(bytes) {
+        var units = ["B", "KB", "MB", "GB"];
+        var n = bytes, i = 0;
+        while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+        return (i === 0 ? n : n.toFixed(1)) + units[i];
+    }
+
+    // Shared by the panel item and the popup, which are both drop targets.
+    function acceptsDrag(drag) {
+        return drag.hasUrls || drag.hasText || drag.hasHtml;
+    }
+
+    function handleDrop(drop) {
+        var locals = [];
+        var remotes = [];
+        var urls = drop.hasUrls ? drop.urls : [];
+        for (var i = 0; i < urls.length; i++) {
+            var raw = urls[i].toString();
+            if (raw.indexOf("http://") === 0 || raw.indexOf("https://") === 0) {
+                remotes.push(raw);  // keep the URL encoded for fetching
+            } else if (raw.indexOf("file://") === 0) {
+                var u;
+                try { u = decodeURIComponent(raw); } catch (e) { u = raw; }
+                locals.push(u.substring("file://".length));
+            }
+        }
+        if (!urls.length && drop.hasText) {
+            var t = drop.text.trim().split(/\s+/)[0];
+            if (t.indexOf("http://") === 0 || t.indexOf("https://") === 0)
+                remotes.push(t);
+        }
+        if (locals.length)
+            root.optimizePaths(locals);
+        // A dragged linked image (e.g. on Facebook) puts the link's
+        // page URL in the uri-list; the image URL is only in the HTML.
+        // Try the <img src> first and keep the dropped URLs as fallback.
+        var srcs = drop.hasHtml ? Drop.imageSrcs(drop.html) : [];
+        if (srcs.length && remotes.length)
+            root.optimizeUrls([srcs.concat(remotes)]);
+        else if (remotes.length)
+            root.optimizeUrls(remotes.map(function (u) { return [u]; }));
+        else if (srcs.length && !locals.length)
+            root.optimizeUrls([srcs]);
+    }
+
+    // Panel item == drop target: icon plus the saved total, so it is wider
+    // than a bare icon. Hovering a drag over it opens the popup, which is a
+    // much bigger drop zone.
     compactRepresentation: Item {
-        Kirigami.Icon {
-            anchors.fill: parent
-            source: "image-x-generic"
-            active: dropArea.containsDrag
+        id: compact
+        readonly property bool vertical: Plasmoid.formFactor === PlasmaCore.Types.Vertical
+        Layout.minimumWidth: vertical ? -1 : row.implicitWidth + Kirigami.Units.smallSpacing * 2
+        Layout.preferredWidth: Layout.minimumWidth
+
+        RowLayout {
+            id: row
+            anchors.centerIn: parent
+            height: parent.height
+            spacing: Kirigami.Units.smallSpacing
+            Kirigami.Icon {
+                Layout.preferredWidth: Math.min(parent.height, Kirigami.Units.iconSizes.medium)
+                Layout.preferredHeight: Layout.preferredWidth
+                source: "image-x-generic"
+                active: dropArea.containsDrag
+            }
+            PlasmaComponents.Label {
+                visible: !compact.vertical
+                text: dropArea.containsDrag ? "Drop to optimize" : "Klop · " + root.humanSize(root.savedTotal)
+            }
         }
         DropArea {
             id: dropArea
             anchors.fill: parent
             onEntered: (drag) => {
-                if (drag.hasUrls || drag.hasText || drag.hasHtml)
+                if (root.acceptsDrag(drag)) {
                     drag.accepted = true;
+                    hoverOpenTimer.restart();
+                }
             }
+            onExited: hoverOpenTimer.stop()
             onDropped: (drop) => {
-                var locals = [];
-                var remotes = [];
-                var urls = drop.hasUrls ? drop.urls : [];
-                for (var i = 0; i < urls.length; i++) {
-                    var raw = urls[i].toString();
-                    if (raw.indexOf("http://") === 0 || raw.indexOf("https://") === 0) {
-                        remotes.push(raw);  // keep the URL encoded for fetching
-                    } else if (raw.indexOf("file://") === 0) {
-                        var u;
-                        try { u = decodeURIComponent(raw); } catch (e) { u = raw; }
-                        locals.push(u.substring("file://".length));
-                    }
-                }
-                if (!urls.length && drop.hasText) {
-                    var t = drop.text.trim().split(/\s+/)[0];
-                    if (t.indexOf("http://") === 0 || t.indexOf("https://") === 0)
-                        remotes.push(t);
-                }
-                if (locals.length)
-                    root.optimizePaths(locals);
-                // A dragged linked image (e.g. on Facebook) puts the link's
-                // page URL in the uri-list; the image URL is only in the HTML.
-                // Try the <img src> first and keep the dropped URLs as fallback.
-                var srcs = drop.hasHtml ? Drop.imageSrcs(drop.html) : [];
-                if (srcs.length && remotes.length)
-                    root.optimizeUrls([srcs.concat(remotes)]);
-                else if (remotes.length)
-                    root.optimizeUrls(remotes.map(function (u) { return [u]; }));
-                else if (srcs.length && !locals.length)
-                    root.optimizeUrls([srcs]);
+                hoverOpenTimer.stop();
+                root.handleDrop(drop);
             }
+        }
+        Timer {
+            id: hoverOpenTimer
+            interval: 600
+            onTriggered: root.expanded = true
         }
         MouseArea {
             anchors.fill: parent
