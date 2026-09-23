@@ -59,3 +59,46 @@ def test_main_qml_routes_web_urls_to_optimize_url():
     assert "optimize-url" in main            # invokes the new CLI verb
     assert "https://" in main                # classifies remote drops
     assert "drop.hasText" in main            # accepts text-only browser drags
+
+
+def _run_drop_js(expr: str):
+    import shutil
+    import subprocess
+
+    import pytest
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed")
+    src = (PKG / "contents" / "code" / "drop.js").read_text()
+    src = src.replace(".pragma library", "")
+    out = subprocess.run(
+        [node, "-e", f"{src}\nconsole.log(JSON.stringify({expr}));"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    return json.loads(out)
+
+
+def test_drop_js_extracts_img_src_from_linked_image_html():
+    # Facebook wraps feed images in a link to the photo page; the image URL is
+    # only in the drag's text/html, entity-escaped.
+    html = (
+        '<a href="https://www.facebook.com/photo/?fbid=1">'
+        '<img alt="x" src="https://scontent.xx.fbcdn.net/v/pic.jpg?oh=a&amp;oe=b"></a>'
+    )
+    assert _run_drop_js(f"imageSrcs({json.dumps(html)})") == [
+        "https://scontent.xx.fbcdn.net/v/pic.jpg?oh=a&oe=b"
+    ]
+
+
+def test_drop_js_ignores_non_http_img_src():
+    html = "<img src='data:image/png;base64,AAA'><img src=\"blob:https://x/1\">"
+    assert _run_drop_js(f"imageSrcs({json.dumps(html)})") == []
+    assert _run_drop_js("imageSrcs('')") == []
+
+
+def test_main_qml_tries_html_img_src_before_link_url():
+    main = (PKG / "contents" / "ui" / "main.qml").read_text()
+    assert 'import "../code/drop.js" as Drop' in main
+    assert "drop.html" in main
+    assert "Drop.imageSrcs" in main

@@ -211,12 +211,20 @@ def _cmd_install_plasmoid(_args) -> int:
 
 def _cmd_optimize_url(args) -> int:
     dest_dir = Path(load_config().web_drop_dir).expanduser()
-    try:
-        path = webfetch.download_image(args.url, dest_dir=dest_dir)
-    except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    # The URLs are alternative sources for one image, tried in order: a
+    # browser drag of a linked image (e.g. Facebook) carries both the <img src>
+    # and the link's HTML page, and only one of them is the actual image.
+    path = None
+    for url in args.urls:
+        try:
+            path = webfetch.download_image(url, dest_dir=dest_dir)
+            break
+        except ValueError as exc:
+            error = exc
+    if path is None:
+        print(f"error: {error}", file=sys.stderr)
         if not sys.stdout.isatty():
-            send_notification("Klop", f"Could not fetch image: {exc}", icon=_notify_icon())
+            send_notification("Klop", f"Could not fetch image: {error}", icon=_notify_icon())
         return 1
 
     engine = _build_engine()
@@ -281,7 +289,10 @@ def main(argv: list[str] | None = None) -> int:
     p_opt.set_defaults(func=_cmd_optimize)
 
     p_opturl = sub.add_parser("optimize-url", help="download, optimize, save, and copy an image URL")
-    p_opturl.add_argument("url")
+    p_opturl.add_argument(
+        "urls", nargs="+", metavar="url",
+        help="image URL; extra URLs are fallbacks for the same image, tried in order",
+    )
     p_opturl.set_defaults(func=_cmd_optimize_url)
 
     p_copy = sub.add_parser("copy", help="copy an image file to the clipboard")

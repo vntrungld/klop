@@ -518,3 +518,69 @@ def test_optimize_url_bad_url_exits_1(capsys, monkeypatch):
     rc = main(["optimize-url", "ftp://ex.com/x"])
     assert rc == 1
     assert "scheme" in capsys.readouterr().err
+
+
+def test_optimize_url_falls_back_to_next_candidate(tmp_path, capsys, monkeypatch, sample_png):
+    # A browser drag of a linked image (e.g. Facebook) carries the link's page
+    # URL plus the <img src>; the page is HTML ("not an image"), so the CLI
+    # must try the other candidates in order.
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
+    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    dest = tmp_path / "webdrop"
+    dest.mkdir()
+
+    import clop_kde.cli as cli_mod
+    from clop_kde.config import Config
+    from clop_kde.job import JobResult, JobStatus
+
+    monkeypatch.setattr(cli_mod, "load_config", lambda path=None: Config(web_drop_dir=str(dest)))
+
+    saved = dest / "pic.png"
+    tried = []
+
+    def fake_download(url, *, dest_dir, **kw):
+        tried.append(url)
+        if "facebook.com/photo" in url:
+            raise ValueError("not an image")
+        saved.write_bytes(sample_png.read_bytes())
+        return saved
+
+    monkeypatch.setattr(cli_mod.webfetch, "download_image", fake_download)
+    monkeypatch.setattr(cli_mod.webfetch, "copy_image_to_clipboard", lambda p: True)
+
+    class _Eng:
+        def optimize(self, job):
+            return JobResult(JobStatus.SKIPPED, job.source_path, 10, 10, message="no gain")
+
+    monkeypatch.setattr(cli_mod, "_build_engine", lambda: _Eng())
+    monkeypatch.setattr(cli_mod.sys.stdout, "isatty", lambda: True)
+
+    rc = main([
+        "optimize-url",
+        "https://www.facebook.com/photo/?fbid=1",
+        "https://scontent.xx.fbcdn.net/v/t39/pic.jpg?oh=a&oe=b",
+    ])
+    assert rc == 0
+    assert tried == [
+        "https://www.facebook.com/photo/?fbid=1",
+        "https://scontent.xx.fbcdn.net/v/t39/pic.jpg?oh=a&oe=b",
+    ]
+    assert str(saved) in capsys.readouterr().out
+
+
+def test_optimize_url_reports_error_when_all_candidates_fail(tmp_path, capsys, monkeypatch):
+    import clop_kde.cli as cli_mod
+    from clop_kde.config import Config
+
+    monkeypatch.setattr(cli_mod, "load_config", lambda path=None: Config(web_drop_dir=str(tmp_path)))
+
+    def fake_download(url, *, dest_dir, **kw):
+        raise ValueError("not an image")
+
+    monkeypatch.setattr(cli_mod.webfetch, "download_image", fake_download)
+    monkeypatch.setattr(cli_mod.sys.stdout, "isatty", lambda: True)
+
+    rc = main(["optimize-url", "https://a.example/x", "https://b.example/y"])
+    assert rc == 1
+    assert "not an image" in capsys.readouterr().err
+

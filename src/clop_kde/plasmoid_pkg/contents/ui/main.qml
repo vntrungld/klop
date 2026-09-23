@@ -3,6 +3,7 @@ import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasma5support as P5Support
 import "../code/backend.js" as Backend
+import "../code/drop.js" as Drop
 
 PlasmoidItem {
     id: root
@@ -56,10 +57,12 @@ PlasmoidItem {
         });
     }
 
-    function optimizeUrls(urls) {
-        for (var i = 0; i < urls.length; i++) {
+    // Each entry is a list of alternative URLs for one image, tried in order.
+    function optimizeUrls(candidateLists) {
+        for (var i = 0; i < candidateLists.length; i++) {
             pendingCount++;
-            exec.run(shquote(Backend.CLOP_BIN) + " optimize-url " + shquote(urls[i]), function (code, out, err) {
+            var args = candidateLists[i].map(shquote).join(" ");
+            exec.run(shquote(Backend.CLOP_BIN) + " optimize-url " + args, function (code, out, err) {
                 pendingCount--;
                 refreshHistory();
             });
@@ -135,7 +138,7 @@ PlasmoidItem {
             id: dropArea
             anchors.fill: parent
             onEntered: (drag) => {
-                if (drag.hasUrls || drag.hasText)
+                if (drag.hasUrls || drag.hasText || drag.hasHtml)
                     drag.accepted = true;
             }
             onDropped: (drop) => {
@@ -159,8 +162,16 @@ PlasmoidItem {
                 }
                 if (locals.length)
                     root.optimizePaths(locals);
-                if (remotes.length)
-                    root.optimizeUrls(remotes);
+                // A dragged linked image (e.g. on Facebook) puts the link's
+                // page URL in the uri-list; the image URL is only in the HTML.
+                // Try the <img src> first and keep the dropped URLs as fallback.
+                var srcs = drop.hasHtml ? Drop.imageSrcs(drop.html) : [];
+                if (srcs.length && remotes.length)
+                    root.optimizeUrls([srcs.concat(remotes)]);
+                else if (remotes.length)
+                    root.optimizeUrls(remotes.map(function (u) { return [u]; }));
+                else if (srcs.length && !locals.length)
+                    root.optimizeUrls([srcs]);
             }
         }
         MouseArea {
