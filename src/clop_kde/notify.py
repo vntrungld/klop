@@ -79,3 +79,32 @@ def send_notification(
         return 0
     match = _NOTIFY_REPLY_RE.search(proc.stdout)
     return int(match.group(1)) if match else 0
+
+
+def wait_for_action(
+    summary: str,
+    body: str,
+    actions: tuple[tuple[str, str], ...],
+    *,
+    icon: str = "",
+    app_name: str = "Clop-KDE",
+    timeout: float = 600,
+) -> str | None:
+    """Post a notification with action buttons and block until it closes;
+    return the clicked action's key, or None if it was dismissed, expired, or
+    could not be shown. Never raises.
+
+    Uses ``notify-send --action``, which waits for the daemon's ActionInvoked /
+    NotificationClosed signals — something a one-shot ``gdbus call`` can't do.
+    """
+    argv = ["notify-send", f"--app-name={app_name}"]
+    if icon:
+        argv.append(f"--icon={icon}")
+    argv += [f"--action={key}={label}" for key, label in actions]
+    argv += ["--", summary, body]
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"clop-kde: notify-send failed: {exc}", file=sys.stderr)
+        return None
+    return proc.stdout.strip() or None

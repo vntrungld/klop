@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -14,7 +16,7 @@ from .engine import Engine
 from .format import human_size, percent_saved
 from .history import HistoryStore
 from .job import JobResult, JobStatus, OptimizationJob
-from .notify import send_notification
+from .notify import send_notification, wait_for_action
 
 
 _ICON_PATH = Path(__file__).parent / "assets" / "tray.svg"
@@ -259,7 +261,46 @@ def _cmd_optimize_url(args) -> int:
             summary = "Klop"
             body = f"Saved {result.path.name}"
         body += f"\nSaved to {dest_dir}" + (" · copied" if copied else "")
+        _spawn_saved_notification(result.path, summary, body)
+    return 0
+
+
+def _spawn_saved_notification(path: Path, summary: str, body: str) -> None:
+    """Show the result notification from a detached child: its Copy / Open
+    folder buttons need a process that outlives this one, and the plasmoid
+    counts the job as running until this process (and its pipes) finish."""
+    try:
+        subprocess.Popen(
+            [sys.executable, "-m", "clop_kde.cli", "notify-saved", str(path), summary, body],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError:
         send_notification(summary, body, icon=_notify_icon())
+
+
+def _open_in_file_manager(path: Path) -> None:
+    dolphin = shutil.which("dolphin")
+    argv = [dolphin, "--select", str(path)] if dolphin else ["xdg-open", str(path.parent)]
+    try:
+        subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as exc:
+        print(f"error: could not open file manager: {exc}", file=sys.stderr)
+
+
+def _cmd_notify_saved(args) -> int:
+    path = Path(args.path)
+    action = wait_for_action(
+        args.summary, args.body,
+        (("copy", "Copy"), ("open", "Open folder")),
+        icon=_notify_icon(),
+    )
+    if action == "copy":
+        webfetch.copy_image_to_clipboard(path)
+    elif action == "open":
+        _open_in_file_manager(path)
     return 0
 
 
@@ -294,6 +335,13 @@ def main(argv: list[str] | None = None) -> int:
         help="image URL; extra URLs are fallbacks for the same image, tried in order",
     )
     p_opturl.set_defaults(func=_cmd_optimize_url)
+
+    # Internal: the detached notification process spawned by optimize-url.
+    p_nsaved = sub.add_parser("notify-saved")
+    p_nsaved.add_argument("path")
+    p_nsaved.add_argument("summary")
+    p_nsaved.add_argument("body")
+    p_nsaved.set_defaults(func=_cmd_notify_saved)
 
     p_copy = sub.add_parser("copy", help="copy an image file to the clipboard")
     p_copy.add_argument("path")

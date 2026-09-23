@@ -584,3 +584,63 @@ def test_optimize_url_reports_error_when_all_candidates_fail(tmp_path, capsys, m
     assert rc == 1
     assert "not an image" in capsys.readouterr().err
 
+
+def test_optimize_url_notification_is_detached_with_path(tmp_path, monkeypatch, sample_png):
+    # The notification's Copy / Open folder buttons need a process that outlives
+    # the CLI, so optimize-url hands the notification to a detached child.
+    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
+    import clop_kde.cli as cli_mod
+    from clop_kde.config import Config
+    from clop_kde.job import JobResult, JobStatus
+
+    monkeypatch.setattr(cli_mod, "load_config", lambda path=None: Config(web_drop_dir=str(tmp_path)))
+    saved = tmp_path / "pic.png"
+    saved.write_bytes(sample_png.read_bytes())
+    monkeypatch.setattr(cli_mod.webfetch, "download_image", lambda url, *, dest_dir, **kw: saved)
+    monkeypatch.setattr(cli_mod.webfetch, "copy_image_to_clipboard", lambda p: True)
+
+    class _Eng:
+        def optimize(self, job):
+            return JobResult(JobStatus.SKIPPED, job.source_path, 10, 10, message="no gain")
+
+    monkeypatch.setattr(cli_mod, "_build_engine", lambda: _Eng())
+    monkeypatch.setattr(cli_mod.sys.stdout, "isatty", lambda: False)
+    spawned = []
+    monkeypatch.setattr(
+        cli_mod.subprocess, "Popen", lambda argv, **kw: spawned.append((argv, kw))
+    )
+
+    assert main(["optimize-url", "https://ex.com/pic.png"]) == 0
+
+    (argv, kw), = spawned
+    assert argv[:4] == [cli_mod.sys.executable, "-m", "clop_kde.cli", "notify-saved"]
+    assert argv[4] == str(saved)
+    assert kw["start_new_session"] is True
+    assert kw["stdout"] == cli_mod.subprocess.DEVNULL  # don't hold the plasmoid's pipe
+
+
+def test_notify_saved_copy_action_copies_image(tmp_path, monkeypatch):
+    import clop_kde.cli as cli_mod
+
+    pic = tmp_path / "pic.png"
+    pic.write_bytes(b"x")
+    copied = []
+    monkeypatch.setattr(cli_mod, "wait_for_action", lambda *a, **k: "copy")
+    monkeypatch.setattr(cli_mod.webfetch, "copy_image_to_clipboard", lambda p: copied.append(p) or True)
+
+    assert main(["notify-saved", str(pic), "pic.png", "body"]) == 0
+    assert copied == [pic]
+
+
+def test_notify_saved_open_action_selects_file_in_file_manager(tmp_path, monkeypatch):
+    import clop_kde.cli as cli_mod
+
+    pic = tmp_path / "pic.png"
+    pic.write_bytes(b"x")
+    runs = []
+    monkeypatch.setattr(cli_mod, "wait_for_action", lambda *a, **k: "open")
+    monkeypatch.setattr(cli_mod.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(cli_mod.subprocess, "Popen", lambda argv, **kw: runs.append(argv))
+
+    assert main(["notify-saved", str(pic), "pic.png", "body"]) == 0
+    assert runs == [["/usr/bin/dolphin", "--select", str(pic)]]
