@@ -32,6 +32,17 @@ Item {
                 Layout.fillWidth: true
             }
             PlasmaComponents.ToolButton {
+                icon.name: "edit-paste"
+                checkable: true
+                checked: controller.clipboardWatch
+                onToggled: controller.setClipboardWatch(checked)
+                PlasmaComponents.ToolTip {
+                    text: controller.clipboardWatch
+                          ? "Clipboard auto-optimize: on"
+                          : "Clipboard auto-optimize: off"
+                }
+            }
+            PlasmaComponents.ToolButton {
                 icon.name: "view-refresh"
                 onClicked: controller.refreshHistory()
             }

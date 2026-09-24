@@ -19,6 +19,10 @@ PlasmoidItem {
     // shows an indeterminate bar while this is > 0.
     property int pendingCount: 0
 
+    // Mirrors `clipboard_watch` in the config; the daemon watches the config
+    // file and applies changes live.
+    property bool clipboardWatch: true
+
     // Shared history model consumed by the full representation (Task 6).
     ListModel { id: historyModel }
 
@@ -119,6 +123,24 @@ PlasmoidItem {
                 });
             }
             savedTotal = total;
+        });
+    }
+
+    function refreshConfig() {
+        exec.run(shquote(Backend.KLOP_BIN) + " config get --json", function (code, out, err) {
+            if (code !== 0)
+                return;
+            try {
+                clipboardWatch = JSON.parse(out).clipboard_watch === true;
+            } catch (e) {}
+        });
+    }
+
+    function setClipboardWatch(on) {
+        clipboardWatch = on;
+        exec.run(shquote(Backend.KLOP_BIN) + " config set clipboard_watch="
+                 + (on ? "true" : "false"), function (code, out, err) {
+            refreshConfig();
         });
     }
 
@@ -230,9 +252,14 @@ PlasmoidItem {
     fullRepresentation: FullRepresentation { controller: root }
 
     onExpandedChanged: {
-        if (expanded)
+        if (expanded) {
             refreshHistory();
+            refreshConfig();
+        }
     }
 
-    Component.onCompleted: refreshHistory()
+    Component.onCompleted: {
+        refreshHistory();
+        refreshConfig();
+    }
 }

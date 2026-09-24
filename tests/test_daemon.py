@@ -131,13 +131,57 @@ def test_build_daemon_enabled_toggle_controls_watcher(qapp):
     assert d.watcher.enabled is False
 
 
-def test_build_daemon_no_watcher_when_disabled(qapp, monkeypatch):
-    import klop.daemon as daemon_mod
-    from klop.config import Config
+def _fake_clipboard():
+    from PySide6.QtCore import QMimeData, QObject, Signal
 
-    monkeypatch.setattr(daemon_mod, "load_config", lambda: Config(clipboard_watch=False))
-    d = build_daemon(qapp, engine=FakeEngine(), backend=FakeBackend())
-    assert d.watcher is None
+    class FakeClipboard(QObject):
+        dataChanged = Signal()
+
+        def mimeData(self):
+            return QMimeData()
+
+        def setMimeData(self, md):
+            pass
+
+    return FakeClipboard()
+
+
+def test_build_daemon_watcher_disabled_by_config(qapp, tmp_path):
+    cfg = tmp_path / "config.toml"
+    cfg.write_text("clipboard_watch = false\n")
+    d = build_daemon(
+        qapp, engine=FakeEngine(), backend=FakeBackend(),
+        clipboard=_fake_clipboard(), config_path=cfg,
+    )
+    assert d.watcher.enabled is False
+    assert d.tray.enabled_action.isChecked() is False
+
+
+def test_build_daemon_reloads_clipboard_watch_when_config_changes(qapp, tmp_path):
+    from klop.config import Config, save_config
+
+    cfg = tmp_path / "config.toml"
+    save_config(Config(clipboard_watch=True), cfg)
+    d = build_daemon(
+        qapp, engine=FakeEngine(), backend=FakeBackend(),
+        clipboard=_fake_clipboard(), config_path=cfg,
+    )
+    assert d.watcher.enabled is True
+
+    save_config(Config(clipboard_watch=False), cfg)  # atomic replace, like `klop config set`
+    import time
+    deadline = time.monotonic() + 5
+    while d.watcher.enabled and time.monotonic() < deadline:
+        qapp.processEvents()
+        time.sleep(0.02)
+    assert d.watcher.enabled is False
+
+    save_config(Config(clipboard_watch=True), cfg)  # still watched after the replace
+    deadline = time.monotonic() + 5
+    while not d.watcher.enabled and time.monotonic() < deadline:
+        qapp.processEvents()
+        time.sleep(0.02)
+    assert d.watcher.enabled is True
 
 
 def test_build_daemon_wires_job_started_to_overlay_pending(qapp, tmp_path):

@@ -118,3 +118,11 @@ def test_panel_drop_target_is_wide_and_opens_popup_on_hover():
     assert "Layout.minimumWidth" in main           # wider than a square icon
     assert "PlasmaCore.Types.Vertical" in main     # but stays square in vertical panels
     assert "hoverOpenTimer" in main                # dragging over the icon opens the popup
+
+
+def test_popup_has_clipboard_watch_toggle():
+    full = (PKG / "contents" / "ui" / "FullRepresentation.qml").read_text()
+    assert "setClipboardWatch" in full
+    main = (PKG / "contents" / "ui" / "main.qml").read_text()
+    assert "clipboard_watch=" in main        # persisted via `klop config set`
+    assert "config get --json" in main
