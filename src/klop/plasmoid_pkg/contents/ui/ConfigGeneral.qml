@@ -88,6 +88,11 @@ ColumnLayout {
             Kirigami.FormData.label: "Video preset:"
         }
         QQC2.SpinBox {
+            id: videoThreads
+            Kirigami.FormData.label: "Video threads (0 = all cores):"
+            from: 0; to: 128
+        }
+        QQC2.SpinBox {
             id: minSaved
             Kirigami.FormData.label: "Min bytes saved:"
             from: 0; to: 1000000
@@ -131,6 +136,7 @@ ColumnLayout {
             "video_crf=" + videoCrf.value,
             "video_codec=" + shquote(videoCodec.text),
             "video_preset=" + shquote(videoPreset.text),
+            "video_threads=" + videoThreads.value,
             "min_bytes_saved=" + minSaved.value,
             "concurrency=" + concurrency.value,
             "clipboard_watch=" + (clipboardWatch.checked ? "true" : "false")
@@ -155,6 +161,7 @@ ColumnLayout {
             videoCrf.value = c.video_crf;
             videoCodec.text = c.video_codec;
             videoPreset.text = c.video_preset;
+            videoThreads.value = c.video_threads;
             minSaved.value = c.min_bytes_saved;
             concurrency.value = c.concurrency;
             clipboardWatch.checked = c.clipboard_watch === true;

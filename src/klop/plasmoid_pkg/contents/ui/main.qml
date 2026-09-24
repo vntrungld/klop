@@ -14,10 +14,17 @@ PlasmoidItem {
     property double savedTotal: 0
     property alias historyModel: historyModel
 
-    // Jobs currently running. The executable data source only reports back on
-    // completion, so we can't show a real percentage — the full representation
-    // shows an indeterminate bar while this is > 0.
+    // Jobs this widget started. The executable data source only reports back
+    // on completion, so live progress comes from the state files below.
     property int pendingCount: 0
+
+    // Live progress of every running `klop optimize` (including ones started
+    // from Dolphin), read from $XDG_RUNTIME_DIR/klop/progress/<pid>.json.
+    // progressPercent is -1 when there is nothing to report.
+    property int activeRuns: 0
+    property int progressPercent: -1
+    property string progressName: ""
+    readonly property bool busy: pendingCount > 0 || activeRuns > 0
 
     // Mirrors `clipboard_watch` in the config; the daemon watches the config
     // file and applies changes live.
@@ -25,6 +32,12 @@ PlasmoidItem {
 
     // Shared history model consumed by the full representation (Task 6).
     ListModel { id: historyModel }
+
+    // Files still being optimized (running + queued) across all runs, shown
+    // above the history with a progress bar each.
+    property alias pendingModel: pendingModel
+    ListModel { id: pendingModel }
+    property int doneTotal: 0
 
     preferredRepresentation: compactRepresentation
 
@@ -96,6 +109,76 @@ PlasmoidItem {
             exec.run(shquote(Backend.KLOP_BIN) + " copy " + shquote(path), function () {});
     }
 
+    property bool polling: false
+    function pollProgress() {
+        if (polling)
+            return;
+        polling = true;
+        // Skip files whose run is gone (killed before it could clean up).
+        exec.run("for f in \"${XDG_RUNTIME_DIR:-/tmp}\"/klop/progress/*.json; do"
+                 + " p=${f##*/}; [ -d \"/proc/${p%.json}\" ] && cat \"$f\"; done; true",
+                 function (code, out, err) {
+            polling = false;
+            var runs = [];
+            var lines = String(out || "").split("\n");
+            for (var i = 0; i < lines.length; i++) {
+                if (!lines[i].trim())
+                    continue;
+                try { runs.push(JSON.parse(lines[i])); } catch (e) {}
+            }
+            var done = 0;
+            var rows = [];
+            for (var k = 0; k < runs.length; k++) {
+                done += runs[k].done;
+                var pending = runs[k].pending || [];
+                for (var m = 0; m < pending.length; m++) {
+                    rows.push({
+                        name: pending[m].name,
+                        running: pending[m].state === "running",
+                        percent: pending[m].percent
+                    });
+                }
+            }
+            // Update rows in place when the shape is unchanged, so the bars
+            // don't get rebuilt (and their animations restarted) every poll.
+            if (rows.length !== pendingModel.count) {
+                pendingModel.clear();
+                for (var r = 0; r < rows.length; r++)
+                    pendingModel.append(rows[r]);
+            } else {
+                for (var q = 0; q < rows.length; q++)
+                    pendingModel.set(q, rows[q]);
+            }
+            // A file finished (moves into history) or a run ended.
+            var finished = activeRuns > runs.length || done > doneTotal;
+            doneTotal = done;
+            activeRuns = runs.length;
+            if (runs.length === 0) {
+                progressPercent = -1;
+                progressName = "";
+            } else {
+                var sum = 0;
+                for (var j = 0; j < runs.length; j++)
+                    sum += runs[j].percent;
+                progressPercent = Math.round(sum / runs.length);
+                progressName = runs.length === 1
+                    ? runs[0].name + (runs[0].total > 1
+                        ? " (" + (runs[0].done + 1) + "/" + runs[0].total + ")" : "")
+                    : runs.length + " jobs";
+            }
+            if (finished)
+                refreshHistory();  // a Dolphin run just ended
+        });
+    }
+
+    Timer {
+        interval: root.busy ? 500 : 3000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: root.pollProgress()
+    }
+
     function refreshHistory() {
         exec.run(shquote(Backend.KLOP_BIN) + " history --json", function (code, out, err) {
             if (code !== 0)
@@ -150,6 +233,16 @@ PlasmoidItem {
         exec.run(shquote(Backend.KLOP_BIN) + " undo " + shquote(backupId), function (code, out, err) {
             refreshHistory();
         });
+    }
+
+    // "image", "video" or "pdf", from the file name; drives row button labels.
+    function mediaKind(name) {
+        var ext = String(name).toLowerCase().replace(/^.*\./, "");
+        if (["mp4", "mov", "mkv", "webm"].indexOf(ext) >= 0)
+            return "video";
+        if (ext === "pdf")
+            return "pdf";
+        return "image";
     }
 
     function humanSize(bytes) {
@@ -219,7 +312,10 @@ PlasmoidItem {
             }
             PlasmaComponents.Label {
                 visible: !compact.vertical
-                text: dropArea.containsDrag ? "Drop to optimize" : "Klop · " + root.humanSize(root.savedTotal)
+                text: dropArea.containsDrag ? "Drop to optimize"
+                    : root.progressPercent >= 0 ? "Klop · " + root.progressPercent + "%"
+                    : root.busy ? "Klop · …"
+                    : "Klop · " + root.humanSize(root.savedTotal)
             }
         }
         DropArea {

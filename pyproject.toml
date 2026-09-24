@@ -7,7 +7,7 @@ name = "klop"
 version = "0.0.1"
 description = "Background media optimizer for KDE Plasma 6"
 requires-python = ">=3.11"
-dependencies = ["PySide6>=6.6"]
+dependencies = ["PySide6>=6.6", "jeepney>=0.8"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "Pillow>=10", "ruff>=0.9"]

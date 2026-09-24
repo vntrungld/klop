@@ -15,6 +15,7 @@ class Optimizer:
     _builder: Callable[[Path, Path, Config], list[str]]
     use_stdout: bool = False
     output_ext: str | None = None  # None = keep source suffix; ".jpg"/".mp4" = convert
+    reports_progress: bool = False  # can be run via ffprogress.run_ffmpeg
 
     def build_command(self, inp: Path, out: Path, cfg: Config) -> list[str]:
         return self._builder(inp, out, cfg)
@@ -92,6 +93,7 @@ def _ffmpeg_cmd(inp: Path, out: Path, cfg: Config) -> list[str]:
         str(cfg.video_crf),
         "-preset",
         cfg.video_preset,
+        *(["-threads", str(cfg.video_threads)] if cfg.video_threads > 0 else []),
         "-c:a",
         "aac",
         str(out),
@@ -104,7 +106,9 @@ GIFSICLE = Optimizer("gifsicle", "gifsicle", _gifsicle_cmd, use_stdout=False)
 CWEBP = Optimizer("cwebp", "cwebp", _cwebp_cmd, use_stdout=False)
 VIPS_WEBP = Optimizer("vips", "vips", _vips_webp_cmd, use_stdout=False)
 GS = Optimizer("gs", "gs", _gs_cmd, use_stdout=False)
-FFMPEG = Optimizer("ffmpeg", "ffmpeg", _ffmpeg_cmd, use_stdout=False, output_ext=".mp4")
+FFMPEG = Optimizer(
+    "ffmpeg", "ffmpeg", _ffmpeg_cmd, use_stdout=False, output_ext=".mp4", reports_progress=True
+)
 
 # First available optimizer per media type wins.
 _REGISTRY: dict[MediaType, list[Optimizer]] = {

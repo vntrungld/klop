@@ -16,8 +16,9 @@ from .engine import Engine
 from .format import human_size, percent_saved
 from .history import HistoryStore
 from .job import JobResult, JobStatus, OptimizationJob
+from .jobview import JobProgress
 from .notify import send_notification, wait_for_action
-
+from .progress import ProgressFile
 
 _ICON_PATH = Path(__file__).parent / "assets" / "tray.svg"
 
@@ -80,6 +81,78 @@ def _optimize_summary(
     return None
 
 
+class _RunProgress:
+    """Fans one ``optimize`` run's progress out to every place that shows it:
+    the KDE job card (no terminal), a bar on stderr (terminal), and the state
+    file the panel widget polls (always)."""
+
+    _BAR = 24
+
+    def __init__(self, names: list[str], *, headless: bool):
+        self.names = names
+        self.total = len(names)
+        self.job = JobProgress.start(self.total, icon=_notify_icon()) if headless else JobProgress()
+        self.state = ProgressFile()
+        self.tty = not headless and sys.stderr.isatty()
+        self._done = 0
+        self._name = ""
+        self._percent = -1
+        self._file_percent = -1
+        self._drawn = False
+
+    def next_file(self, done: int, name: str) -> None:
+        self._done, self._name = done, name
+        self._file_percent = -1
+        self.job.update(done, self.total, name)
+        self._report(0.0, force=True)
+
+    def file_fraction(self, fraction: float) -> None:
+        """How far through the current file we are (reported for videos)."""
+        self._report(fraction)
+        if self.tty:
+            filled = int(fraction * self._BAR)
+            bar = "█" * filled + "░" * (self._BAR - filled)
+            sys.stderr.write(
+                f"\r\033[K[{self._done + 1}/{self.total}] {self._name} {bar} {int(fraction * 100)}%"
+            )
+            sys.stderr.flush()
+            self._drawn = True
+
+    def clear_line(self) -> None:
+        """Wipe the terminal bar before a result line is printed."""
+        if self._drawn:
+            sys.stderr.write("\r\033[K")
+            sys.stderr.flush()
+            self._drawn = False
+
+    def close(self) -> None:
+        self.clear_line()
+        self.state.remove()
+
+    def _report(self, fraction: float, *, force: bool = False) -> None:
+        percent = int((self._done + fraction) * 100 / max(self.total, 1))
+        file_percent = int(fraction * 100) if not force else -1
+        if not force and (percent, file_percent) == (self._percent, self._file_percent):
+            return  # ffmpeg reports twice a second; skip no-op updates
+        self._percent, self._file_percent = percent, file_percent
+        self.job.set_percent(percent)
+        # Files still to finish, for the widget's per-row progress.
+        pending = [{"name": self._name, "state": "running", "percent": file_percent}]
+        pending += [
+            {"name": n, "state": "queued", "percent": -1}
+            for n in self.names[self._done + 1 :]
+        ]
+        self.state.write(
+            {
+                "name": self._name,
+                "done": self._done,
+                "total": self.total,
+                "percent": percent,
+                "pending": pending,
+            }
+        )
+
+
 def _cmd_optimize(args) -> int:
     engine = _build_engine()
     history = HistoryStore()
@@ -87,45 +160,60 @@ def _cmd_optimize(args) -> int:
     optimized: list[JobResult] = []
     others = 0
     errors = 0
-    for raw in args.files:
-        path = Path(raw)
-        if not path.exists():
-            print(f"error: file not found: {path}", file=sys.stderr)
-            exit_code = 1
-            errors += 1
-            continue
-        result = engine.optimize(OptimizationJob(source_path=path))
-        if result.status == JobStatus.OPTIMIZED:
-            print(
-                f"optimized {result.path.name}: "
-                f"{human_size(result.original_size)} -> {human_size(result.new_size)} "
-                f"(saved {human_size(result.saved_bytes)}, undo id {result.backup_id})"
+    # Dolphin's service menu and the panel widget run us with no terminal, so
+    # stdout goes nowhere; progress goes to a KDE job card instead.
+    headless = not sys.stdout.isatty()
+    progress = _RunProgress([Path(f).name for f in args.files], headless=headless)
+    try:
+        for done, raw in enumerate(args.files):
+            path = Path(raw)
+            progress.next_file(done, path.name)
+            if not path.exists():
+                print(f"error: file not found: {path}", file=sys.stderr)
+                exit_code = 1
+                errors += 1
+                continue
+            result = engine.optimize(
+                OptimizationJob(source_path=path), on_progress=progress.file_fraction
             )
-            history.record(
-                "file",
-                result.path.name,
-                str(result.path),
-                result.original_size,
-                result.new_size,
-                result.backup_id,
-            )
-            optimized.append(result)
-        elif result.status == JobStatus.ERROR:
-            print(f"error {path.name}: {result.message}", file=sys.stderr)
-            exit_code = 1
-            errors += 1
-            continue
-        else:
-            print(f"{result.status.value} {path.name}: {result.message}")
-            others += 1
+            progress.clear_line()
+            if result.status == JobStatus.OPTIMIZED:
+                print(
+                    f"optimized {result.path.name}: "
+                    f"{human_size(result.original_size)} -> {human_size(result.new_size)} "
+                    f"(saved {human_size(result.saved_bytes)}, undo id {result.backup_id})"
+                )
+                history.record(
+                    "file",
+                    result.path.name,
+                    str(result.path),
+                    result.original_size,
+                    result.new_size,
+                    result.backup_id,
+                )
+                optimized.append(result)
+            elif result.status == JobStatus.ERROR:
+                print(f"error {path.name}: {result.message}", file=sys.stderr)
+                exit_code = 1
+                errors += 1
+                continue
+            else:
+                print(f"{result.status.value} {path.name}: {result.message}")
+                others += 1
+    finally:
+        progress.close()
 
-    # Dolphin's service menu runs us with no terminal, so stdout goes nowhere;
-    # surface a desktop notification there. In an interactive shell the printed
-    # output is enough, so stay quiet.
-    if not sys.stdout.isatty():
+    if headless:
         summary = _optimize_summary(optimized, others, errors)
-        if summary is not None:
-            send_notification(summary[0], summary[1], icon=_notify_icon())
+        if summary is None:
+            progress.job.close()
+        else:
+            title, body = summary
+            # The finished job card doubles as the summary (it is already
+            # titled "Klop"); without a job tracker, post a notification.
+            message = body if title == "Klop" else f"{title} · {body}"
+            if not progress.job.finish(message):
+                send_notification(title, body, icon=_notify_icon())
     return exit_code
 
 

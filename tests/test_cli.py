@@ -73,6 +73,55 @@ def test_optimize_notifies_when_launched_without_a_terminal(tmp_path, monkeypatc
     assert len(sent) == 1  # exactly one summary notification
 
 
+def test_optimize_shows_job_progress_when_launched_without_a_terminal(tmp_path, monkeypatch):
+    import sys
+
+    import klop.cli as cli_mod
+
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setattr(shutil, "which", lambda name: None)  # no tools -> skipped
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+    events = []
+
+    class FakeProgress:
+        def __init__(self, total):
+            events.append(("start", total))
+
+        def update(self, done, total, name):
+            events.append(("update", done, total, name))
+
+        def set_percent(self, percent):
+            events.append(("percent", percent))
+
+        def finish(self, message):
+            events.append(("finish", message))
+            return True
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cli_mod.JobProgress, "start", lambda total, **kw: FakeProgress(total))
+    sent = []
+    monkeypatch.setattr(cli_mod, "send_notification", lambda *a, **k: sent.append(a))
+
+    files = []
+    for name in ("a.png", "b.png"):
+        f = tmp_path / name
+        f.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 100)
+        files.append(str(f))
+    assert main(["optimize", *files]) == 0
+
+    assert events == [
+        ("start", 2),
+        ("update", 0, 2, "a.png"),
+        ("percent", 0),
+        ("update", 1, 2, "b.png"),
+        ("percent", 50),
+        ("finish", "Nothing to optimize (2 file(s) unchanged)"),
+    ]
+    assert sent == []  # the finished job card is the summary
+
+
 def test_optimize_does_not_notify_in_a_terminal(tmp_path, monkeypatch):
     import sys
 
@@ -256,7 +305,7 @@ def test_optimize_records_file_history(tmp_path, monkeypatch):
     f.write_bytes(b"x" * 100)
 
     class _Eng:
-        def optimize(self, job):
+        def optimize(self, job, on_progress=None):
             return JobResult(JobStatus.OPTIMIZED, job.source_path, 100, 40, backup_id="bid1")
 
     monkeypatch.setattr(cli_mod, "_build_engine", lambda: _Eng())
@@ -290,7 +339,7 @@ def test_optimize_convert_uses_result_path_not_deleted_source(tmp_path, capsys, 
     # the CLI's initial existence check.
 
     class _Eng:
-        def optimize(self, job):
+        def optimize(self, job, on_progress=None):
             return JobResult(JobStatus.OPTIMIZED, converted, 1000, 400, backup_id="B1")
 
     monkeypatch.setattr(cli_mod, "_build_engine", lambda: _Eng())
@@ -668,3 +717,89 @@ def test_install_flags_select_components(monkeypatch):
 
     assert main(["install", "--dolphin", "--service"]) == 1  # a failing step fails the run
     assert ran == ["dolphin", "service"]
+
+
+def test_optimize_video_progress_reaches_widget_state_and_terminal(
+    tmp_path, capsys, monkeypatch
+):
+    import sys
+
+    import klop.cli as cli_mod
+
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stderr, "isatty", lambda: True)
+    state_dir = tmp_path / "progress"
+    snapshots = []
+
+    def progress_runner(cmd, on_progress):
+        for f in (0.25, 0.5):
+            on_progress(f)
+            snapshots.append(_json.loads(next(state_dir.glob("*.json")).read_text()))
+        Path(cmd[-1]).write_bytes(b"\x00" * 10)
+        return 0
+
+    def build_engine():
+        return Engine(
+            config=Config(),
+            backup_store=BackupStore(tmp_path / "backups"),
+            capabilities={"ffmpeg": "/usr/bin/ffmpeg"},
+            progress_runner=progress_runner,
+        )
+
+    monkeypatch.setattr(cli_mod, "_build_engine", build_engine)
+    clip = tmp_path / "clip.mkv"
+    clip.write_bytes(b"\x1a\x45\xdf\xa3" + b"x" * 5000)
+
+    assert main(["optimize", str(clip)]) == 0
+
+    assert [s["percent"] for s in snapshots] == [25, 50]
+    assert snapshots[0]["name"] == "clip.mkv"
+    assert list(state_dir.glob("*.json")) == []  # removed when the run ends
+    err = capsys.readouterr().err
+    assert "[1/1] clip.mkv" in err and "50%" in err
+
+
+def test_optimize_state_lists_running_and_queued_files(tmp_path, monkeypatch):
+    import sys
+
+    import klop.cli as cli_mod
+
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    state_dir = tmp_path / "progress"
+    snapshots = []
+
+    def progress_runner(cmd, on_progress):
+        on_progress(0.4)
+        snapshots.append(_json.loads(next(state_dir.glob("*.json")).read_text()))
+        Path(cmd[-1]).write_bytes(b"\x00" * 10)
+        return 0
+
+    monkeypatch.setattr(
+        cli_mod,
+        "_build_engine",
+        lambda: Engine(
+            config=Config(),
+            backup_store=BackupStore(tmp_path / "backups"),
+            capabilities={"ffmpeg": "/usr/bin/ffmpeg"},
+            progress_runner=progress_runner,
+        ),
+    )
+    clips = []
+    for name in ("a.mkv", "b.mkv", "c.mkv"):
+        clip = tmp_path / name
+        clip.write_bytes(b"\x1a\x45\xdf\xa3" + b"x" * 5000)
+        clips.append(str(clip))
+
+    assert main(["optimize", *clips]) == 0
+
+    first, second, _ = snapshots
+    assert first["pending"] == [
+        {"name": "a.mkv", "state": "running", "percent": 40},
+        {"name": "b.mkv", "state": "queued", "percent": -1},
+        {"name": "c.mkv", "state": "queued", "percent": -1},
+    ]
+    assert first["percent"] == 13  # 0.4 of the first of three files
+    assert [p["name"] for p in second["pending"]] == ["b.mkv", "c.mkv"]
+    assert second["done"] == 1

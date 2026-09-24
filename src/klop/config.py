@@ -18,6 +18,7 @@ class Config:
     video_crf: int = 28
     video_codec: str = "libx264"
     video_preset: str = "medium"
+    video_threads: int = 0             # encoder threads per video; 0 = ffmpeg's default (all cores)
     min_bytes_saved: int = 1
     concurrency: int = 2
     backup_retention_days: int = 7

@@ -19,6 +19,10 @@ system, and keeps a backup so you can undo.
   and puts the smaller version back on the clipboard.
 - **Dolphin integration.** An "Optimize with Klop" entry in the right-click menu
   for PNG, JPEG, GIF, and WebP files.
+- **Live progress.** While `klop optimize` runs, a Plasma progress card shows the
+  current file and how many are done, then turns into the result summary. The
+  panel widget shows the percentage too, and a terminal run draws a bar. Videos
+  report a real percentage as ffmpeg encodes.
 - **Undo and history.** Originals are backed up before they are replaced (7 days
   / 500 MB by default). Any result can be restored.
 - **Safe by default.** A file is only replaced when the result is actually smaller.
@@ -112,6 +116,7 @@ widget's settings page or with `klop config set`:
 | `video_crf`             | `28`              | ffmpeg CRF                                 |
 | `video_codec`           | `libx264`         | ffmpeg video codec                         |
 | `video_preset`          | `medium`          | ffmpeg preset                              |
+| `video_threads`         | `0`               | ffmpeg encoder threads per video (0 = all cores) |
 | `min_bytes_saved`       | `1`               | Keep the original unless at least this much is saved |
 | `concurrency`           | `2`               | Parallel jobs                              |
 | `backup_retention_days` | `7`               | How long backups are kept                  |

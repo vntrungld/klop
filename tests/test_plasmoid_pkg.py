@@ -26,7 +26,7 @@ def test_full_representation_lists_history_and_undo():
 
 def test_full_representation_has_progress_and_row_actions():
     full = (PKG / "contents" / "ui" / "FullRepresentation.qml").read_text()
-    assert "pendingCount" in full          # indeterminate progress while jobs run
+    assert "progressPercent" in full       # live progress while jobs run
     assert "ProgressBar" in full
     assert "openImage" in full             # open image / folder / copy buttons
     assert "openFolder" in full
@@ -126,3 +126,13 @@ def test_popup_has_clipboard_watch_toggle():
     main = (PKG / "contents" / "ui" / "main.qml").read_text()
     assert "clipboard_watch=" in main        # persisted via `klop config set`
     assert "config get --json" in main
+
+
+def test_history_rows_label_open_by_media_kind_and_show_pending_files():
+    full = (PKG / "contents" / "ui" / "FullRepresentation.qml").read_text()
+    main = (PKG / "contents" / "ui" / "main.qml").read_text()
+    assert '"Open video"' in full and '"Open PDF"' in full
+    assert "mediaKind(model.name)" in full     # copy button hidden for non-images
+    assert "controller.pendingModel" in full   # per-file rows above the history
+    assert "function mediaKind" in main
+    assert "pending[m].state" in main          # fed from the CLI's state files

@@ -52,20 +52,30 @@ Item {
             }
         }
 
-        // Indeterminate progress while optimize jobs are in flight — the CLI only
-        // reports back on completion, so there is no real percentage to show.
+        // Live progress from the running optimize jobs' state files (a real
+        // percentage for videos); indeterminate until the first report lands.
         RowLayout {
             Layout.fillWidth: true
-            visible: controller.pendingCount > 0
+            visible: controller.busy
             spacing: Kirigami.Units.smallSpacing
             PlasmaComponents.Label {
                 font: Kirigami.Theme.smallFont
                 opacity: 0.7
-                text: "Optimizing…"
+                elide: Text.ElideMiddle
+                Layout.maximumWidth: full.width / 2
+                text: controller.progressName ? controller.progressName : "Optimizing…"
             }
             QQC2.ProgressBar {
                 Layout.fillWidth: true
-                indeterminate: true
+                indeterminate: controller.progressPercent < 0
+                from: 0
+                to: 100
+                value: Math.max(0, controller.progressPercent)
+            }
+            PlasmaComponents.Label {
+                font: Kirigami.Theme.smallFont
+                visible: controller.progressPercent >= 0
+                text: controller.progressPercent + "%"
             }
         }
 
@@ -77,6 +87,43 @@ Item {
                 id: view
                 model: controller.historyModel
                 clip: true
+
+                // Files still being optimized, one row each, above the history.
+                header: ColumnLayout {
+                    width: ListView.view.width
+                    spacing: 0
+                    Repeater {
+                        model: controller.pendingModel
+                        delegate: PlasmaComponents.ItemDelegate {
+                            Layout.fillWidth: true
+                            contentItem: ColumnLayout {
+                                spacing: Kirigami.Units.smallSpacing
+                                RowLayout {
+                                    PlasmaComponents.Label {
+                                        text: model.name
+                                        elide: Text.ElideMiddle
+                                        Layout.fillWidth: true
+                                    }
+                                    PlasmaComponents.Label {
+                                        font: Kirigami.Theme.smallFont
+                                        opacity: 0.7
+                                        text: !model.running ? "Waiting…"
+                                            : model.percent >= 0 ? model.percent + "%"
+                                            : "Optimizing…"
+                                    }
+                                }
+                                QQC2.ProgressBar {
+                                    Layout.fillWidth: true
+                                    from: 0
+                                    to: 100
+                                    value: Math.max(0, model.percent)
+                                    indeterminate: model.running && model.percent < 0
+                                    opacity: model.running ? 1 : 0.4
+                                }
+                            }
+                        }
+                    }
+                }
                 delegate: PlasmaComponents.ItemDelegate {
                     width: ListView.view.width
                     contentItem: RowLayout {
@@ -101,9 +148,12 @@ Item {
                             }
                         }
                         PlasmaComponents.ToolButton {
-                            icon.name: "document-open"
+                            readonly property string kind: controller.mediaKind(model.name)
+                            icon.name: kind === "video" ? "media-playback-start"
+                                     : kind === "pdf" ? "application-pdf" : "document-open"
                             visible: model.path !== ""
-                            QQC2.ToolTip.text: "Open image"
+                            QQC2.ToolTip.text: kind === "video" ? "Open video"
+                                             : kind === "pdf" ? "Open PDF" : "Open image"
                             QQC2.ToolTip.visible: hovered
                             onClicked: controller.openImage(model.path)
                         }
@@ -116,7 +166,9 @@ Item {
                         }
                         PlasmaComponents.ToolButton {
                             icon.name: "edit-copy"
-                            visible: model.path !== ""
+                            // `klop copy` puts image data on the clipboard; it
+                            // can't do that for videos or PDFs.
+                            visible: model.path !== "" && controller.mediaKind(model.name) === "image"
                             QQC2.ToolTip.text: "Copy image"
                             QQC2.ToolTip.visible: hovered
                             onClicked: controller.copyImage(model.path)
@@ -134,7 +186,7 @@ Item {
                 PlasmaExtras.PlaceholderMessage {
                     anchors.centerIn: parent
                     width: parent.width - Kirigami.Units.gridUnit * 4
-                    visible: view.count === 0
+                    visible: view.count === 0 && controller.pendingModel.count === 0
                     text: "No optimizations yet"
                 }
             }

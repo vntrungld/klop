@@ -161,3 +161,12 @@ def test_new_knobs_apply_overrides():
     c = apply_overrides(Config(), {"video_crf": "23", "video_codec": "libx265"})
     assert c.video_crf == 23
     assert c.video_codec == "libx265"
+
+
+def test_video_threads_defaults_to_auto_and_round_trips(tmp_path):
+    assert Config().video_threads == 0
+    c = apply_overrides(Config(), {"video_threads": "4"})
+    assert c.video_threads == 4
+    path = tmp_path / "config.toml"
+    save_config(c, path)
+    assert load_config(path).video_threads == 4

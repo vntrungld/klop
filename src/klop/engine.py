@@ -4,10 +4,12 @@ import os
 import stat
 import subprocess
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 from .backup import BackupStore
 from .config import Config
+from .ffprogress import run_ffmpeg
 from .job import JobResult, JobStatus, OptimizationJob
 from .media import detect_media_type
 from .optimizers import expected_tools, select_optimizer
@@ -25,13 +27,26 @@ def _default_runner(cmd: list[str], stdout_path: Path | None) -> int:
 
 
 class Engine:
-    def __init__(self, config: Config, backup_store: BackupStore, capabilities, runner=None):
+    def __init__(
+        self,
+        config: Config,
+        backup_store: BackupStore,
+        capabilities,
+        runner=None,
+        progress_runner=None,
+    ):
         self.config = config
         self.backup_store = backup_store
         self.capabilities = capabilities
         self._runner = runner or _default_runner
+        # (cmd, on_progress) -> exit code, for optimizers that report progress.
+        self._progress_runner = progress_runner or run_ffmpeg
 
-    def optimize(self, job: OptimizationJob) -> JobResult:
+    def optimize(
+        self, job: OptimizationJob, on_progress: Callable[[float], None] | None = None
+    ) -> JobResult:
+        """Optimize one file. ``on_progress`` gets 0.0–1.0 while an optimizer
+        that can report it (ffmpeg) runs; image tools finish without calls."""
         source = Path(job.source_path)
         media_type = job.media_type or detect_media_type(source)
         original_size = source.stat().st_size
@@ -55,7 +70,10 @@ class Engine:
         try:
             cmd = optimizer.build_command(source, tmp, self.config)
             stdout_path = tmp if optimizer.use_stdout else None
-            code = self._runner(cmd, stdout_path)
+            if on_progress is not None and optimizer.reports_progress:
+                code = self._progress_runner(cmd, on_progress)
+            else:
+                code = self._runner(cmd, stdout_path)
 
             if code != 0 or not tmp.exists() or tmp.stat().st_size == 0:
                 return JobResult(

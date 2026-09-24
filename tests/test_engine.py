@@ -310,3 +310,44 @@ def test_same_extension_undo_does_not_delete_anything(tmp_path):
     result = engine.optimize(OptimizationJob(source_path=f))
     engine.undo(result.backup_id)
     assert f.exists() and len(f.read_bytes()) == 1008
+
+
+def test_video_progress_goes_through_the_progress_runner(tmp_path):
+    src = tmp_path / "clip.mkv"
+    src.write_bytes(b"\x1a\x45\xdf\xa3" + b"x" * 5000)
+
+    def runner(cmd, stdout_path):
+        raise AssertionError("plain runner must not run when progress is wanted")
+
+    def progress_runner(cmd, on_progress):
+        on_progress(0.5)
+        on_progress(1.0)
+        Path(cmd[-1]).write_bytes(b"\x00" * 500)
+        return 0
+
+    engine = Engine(
+        config=Config(),
+        backup_store=BackupStore(tmp_path / "backups"),
+        capabilities={"ffmpeg": "/usr/bin/ffmpeg"},
+        runner=runner,
+        progress_runner=progress_runner,
+    )
+    seen = []
+    result = engine.optimize(OptimizationJob(source_path=src), on_progress=seen.append)
+
+    assert result.status == JobStatus.OPTIMIZED
+    assert seen == [0.5, 1.0]
+
+
+def test_image_optimizers_ignore_on_progress(tmp_path):
+    src = tmp_path / "a.png"
+    src.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 1000)
+
+    def runner(cmd, stdout_path):
+        return 1
+
+    engine = make_engine(tmp_path, {"pngquant": "/usr/bin/pngquant"}, runner)
+    seen = []
+    engine.optimize(OptimizationJob(source_path=src), on_progress=seen.append)
+
+    assert seen == []

@@ -11,6 +11,18 @@ def _isolate_history(tmp_path, monkeypatch):
     monkeypatch.setenv("KLOP_HISTORY_FILE", str(tmp_path / "history.jsonl"))
 
 
+@pytest.fixture(autouse=True)
+def _no_job_tracker(monkeypatch):
+    # Headless CLI runs would otherwise put real progress cards on the
+    # desktop; tests that exercise progress install their own fake.
+    monkeypatch.setattr("klop.jobview._connect", lambda: None)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_progress_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("KLOP_PROGRESS_DIR", str(tmp_path / "progress"))
+
+
 @pytest.fixture
 def sample_png(tmp_path):
     p = tmp_path / "sample.png"

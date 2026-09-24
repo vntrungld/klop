@@ -135,3 +135,13 @@ def test_existing_optimizers_default_output_ext_none():
 def test_select_convert_optimizers():
     caps = {"ffmpeg": "/x", "vips": "/x"}
     assert select_optimizer(MediaType.VIDEO, caps, Config()) is FFMPEG
+
+
+def test_ffmpeg_threads_limit_is_passed_only_when_set():
+    inp, out = Path("in.mkv"), Path("out.mp4")
+    assert "-threads" not in FFMPEG.build_command(inp, out, Config())
+
+    cmd = FFMPEG.build_command(inp, out, Config(video_threads=2))
+    i = cmd.index("-threads")
+    assert cmd[i + 1] == "2"
+    assert i < cmd.index(str(out))  # an output option, before the output path
