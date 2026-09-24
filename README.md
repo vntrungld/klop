@@ -59,21 +59,28 @@ cd klop
 python -m venv .venv
 .venv/bin/pip install -e .
 
-.venv/bin/klop install-plasmoid   # panel widget "Klop"
-.venv/bin/klop install-dolphin    # Dolphin right-click menu
+.venv/bin/klop install   # panel widget + Dolphin menu + daemon service
 ```
 
-Then add the **Klop** widget to your panel (right-click the panel → *Add
-Widgets…*). If it doesn't show up, restart plasmashell:
+`klop install` sets up all three parts. Pass `--plasmoid`, `--dolphin` or
+`--service` to install only those. The widget is added to your first panel
+(pass `--no-panel` to skip that and add it yourself via right-click the
+panel → *Add Widgets…*). After upgrading, restart plasmashell to load the new
+widget code:
 
 ```sh
 kquitapp6 plasmashell && kstart plasmashell
 ```
 
-For clipboard auto-optimize, run the tray daemon. You can add it to autostart:
+The daemon handles clipboard auto-optimize. `--service` installs it as a
+systemd user service (`klop-daemon.service`) that starts with the Plasma
+session and runs without a tray icon: the widget shows the savings total,
+and its clipboard button turns auto-optimize on and off (the daemon picks
+up config changes live).
 
 ```sh
-.venv/bin/klop daemon
+systemctl --user status klop-daemon
+journalctl --user -u klop-daemon
 ```
 
 ## CLI

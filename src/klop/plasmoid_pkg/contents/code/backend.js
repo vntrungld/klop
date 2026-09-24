@@ -1,3 +1,3 @@
 .pragma library
-// Overwritten with the absolute klop path by `klop install-plasmoid`.
+// Overwritten with the absolute klop path by `klop install`.
 var KLOP_BIN = "klop";

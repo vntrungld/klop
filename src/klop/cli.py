@@ -200,15 +200,50 @@ def _cmd_config_set(args) -> int:
     return 0
 
 
-def _cmd_install_plasmoid(_args) -> int:
-    from .plasmoid import install_plasmoid
+def _cmd_install_plasmoid(args) -> int:
+    from .plasmoid import add_to_panel, install_plasmoid
 
     dest = install_plasmoid()
     print(f"installed Klop plasmoid: {dest}")
-    print("Add the 'Klop' widget to a panel (right-click a panel → Add Widgets).")
-    print("If it does not appear, restart plasmashell:")
+    status = "skipped" if args.no_panel else add_to_panel()
+    if status == "added":
+        print("Added the 'Klop' widget to your panel.")
+    elif status == "present":
+        print("The 'Klop' widget is already on a panel.")
+    else:
+        print("Add the 'Klop' widget to a panel (right-click a panel → Add Widgets).")
+    print("To load the new widget code, restart plasmashell:")
     print("  kquitapp6 plasmashell && kstart plasmashell")
     return 0
+
+
+def _cmd_install_service(_args) -> int:
+    from .service import install_service
+
+    try:
+        dest = install_service()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"klop: could not enable the systemd service: {exc}", file=sys.stderr)
+        return 1
+    print(f"installed and started systemd user service: {dest}")
+    print("Logs: journalctl --user -u klop-daemon")
+    return 0
+
+
+def _cmd_install(args) -> int:
+    # No component flags means install everything.
+    picked = args.plasmoid or args.dolphin or args.service
+    steps = []
+    if args.plasmoid or not picked:
+        steps.append(_cmd_install_plasmoid)
+    if args.dolphin or not picked:
+        steps.append(_cmd_install_dolphin)
+    if args.service or not picked:
+        steps.append(_cmd_install_service)
+    rc = 0
+    for step in steps:
+        rc = step(args) or rc
+    return rc
 
 
 def _cmd_optimize_url(args) -> int:
@@ -315,10 +350,10 @@ def _cmd_copy(args) -> int:
     return 1
 
 
-def _cmd_daemon(_args) -> int:
+def _cmd_daemon(args) -> int:
     from .daemon import run_daemon  # lazy: keeps Qt out of the headless CLI import path
 
-    return run_daemon()
+    return run_daemon(show_tray=not args.no_tray)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -358,18 +393,28 @@ def main(argv: list[str] | None = None) -> int:
     p_caps = sub.add_parser("caps", help="show detected optimizer tools")
     p_caps.set_defaults(func=_cmd_caps)
 
-    p_daemon = sub.add_parser("daemon", help="run the system-tray daemon")
+    p_daemon = sub.add_parser("daemon", help="run the clipboard/overlay daemon")
+    p_daemon.add_argument(
+        "--no-tray", action="store_true",
+        help="run without a system-tray icon (the panel widget replaces it)",
+    )
     p_daemon.set_defaults(func=_cmd_daemon)
 
-    p_install = sub.add_parser(
-        "install-dolphin", help="install the Dolphin right-click 'Optimize with Klop' menu"
+    p_all = sub.add_parser(
+        "install",
+        help="install the panel widget, Dolphin menu and daemon service",
+        description="With no component flags, installs all three.",
     )
-    p_install.set_defaults(func=_cmd_install_dolphin)
-
-    p_plasmoid = sub.add_parser(
-        "install-plasmoid", help="install the Klop Plasma panel widget"
+    p_all.add_argument("--plasmoid", action="store_true", help="install the panel widget")
+    p_all.add_argument("--dolphin", action="store_true", help="install the Dolphin menu")
+    p_all.add_argument(
+        "--service", action="store_true", help="install the daemon as a systemd user service"
     )
-    p_plasmoid.set_defaults(func=_cmd_install_plasmoid)
+    p_all.add_argument(
+        "--no-panel", action="store_true",
+        help="do not add the widget to a panel automatically",
+    )
+    p_all.set_defaults(func=_cmd_install)
 
     p_config = sub.add_parser("config", help="get or set optimizer settings")
     csub = p_config.add_subparsers(dest="config_cmd", required=True)

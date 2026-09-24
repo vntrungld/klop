@@ -96,7 +96,7 @@ def test_install_dolphin_writes_service_menu(tmp_path, capsys, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     monkeypatch.setattr(shutil, "which", lambda name: "/opt/bin/klop")
 
-    rc = main(["install-dolphin"])
+    rc = main(["install", "--dolphin"])
     out = capsys.readouterr().out
 
     assert rc == 0
@@ -644,3 +644,27 @@ def test_notify_saved_open_action_selects_file_in_file_manager(tmp_path, monkeyp
 
     assert main(["notify-saved", str(pic), "pic.png", "body"]) == 0
     assert runs == [["/usr/bin/dolphin", "--select", str(pic)]]
+
+
+def test_install_without_flags_runs_every_component(monkeypatch):
+    import klop.cli as cli
+
+    ran = []
+    monkeypatch.setattr(cli, "_cmd_install_plasmoid", lambda a: ran.append("plasmoid") or 0)
+    monkeypatch.setattr(cli, "_cmd_install_dolphin", lambda a: ran.append("dolphin") or 0)
+    monkeypatch.setattr(cli, "_cmd_install_service", lambda a: ran.append("service") or 0)
+
+    assert main(["install"]) == 0
+    assert ran == ["plasmoid", "dolphin", "service"]
+
+
+def test_install_flags_select_components(monkeypatch):
+    import klop.cli as cli
+
+    ran = []
+    monkeypatch.setattr(cli, "_cmd_install_plasmoid", lambda a: ran.append("plasmoid") or 0)
+    monkeypatch.setattr(cli, "_cmd_install_dolphin", lambda a: ran.append("dolphin") or 0)
+    monkeypatch.setattr(cli, "_cmd_install_service", lambda a: ran.append("service") or 1)
+
+    assert main(["install", "--dolphin", "--service"]) == 1  # a failing step fails the run
+    assert ran == ["dolphin", "service"]

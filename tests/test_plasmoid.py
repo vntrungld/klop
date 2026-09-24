@@ -39,3 +39,36 @@ def test_install_replaces_existing_dest(tmp_path):
     plasmoid.install_plasmoid(src=src, dest_dir=dest, klop_bin="/opt/bin/klop")
 
     assert not (dest / "stale.txt").exists()
+
+
+class _Proc:
+    def __init__(self, stdout, returncode=0):
+        self.stdout = stdout
+        self.returncode = returncode
+
+
+def test_add_to_panel_runs_plasmashell_script_and_reports_outcome():
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        return _Proc("added\n")
+
+    assert plasmoid.add_to_panel(run=run) == "added"
+    cmd = calls[0]
+    assert cmd[:4] == ["qdbus6", "org.kde.plasmashell", "/PlasmaShell",
+                       "org.kde.PlasmaShell.evaluateScript"]
+    assert '"org.trungld.klop"' in cmd[4]
+    assert "addWidget" in cmd[4]
+
+
+def test_add_to_panel_reports_already_present():
+    assert plasmoid.add_to_panel(run=lambda cmd, **kw: _Proc("present")) == "present"
+
+
+def test_add_to_panel_unavailable_without_plasmashell():
+    def missing(cmd, **kw):
+        raise FileNotFoundError("qdbus6")
+
+    assert plasmoid.add_to_panel(run=missing) == "unavailable"
+    assert plasmoid.add_to_panel(run=lambda cmd, **kw: _Proc("", 1)) == "unavailable"
