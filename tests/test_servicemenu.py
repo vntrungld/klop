@@ -19,7 +19,8 @@ def test_desktop_entry_wires_exec_action_and_mimetypes():
     assert "[Desktop Action optimizeWithKlop]" in entry
     assert "Name=Optimize with Klop" in entry
     assert "Icon=/x/icon.svg" in entry
-    for mime in ("image/png", "image/jpeg", "image/gif", "image/webp"):
+    for mime in ("image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4",
+                 "video/quicktime", "video/matroska", "video/x-matroska", "video/webm"):
         assert mime in entry
 
 

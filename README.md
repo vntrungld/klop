@@ -18,7 +18,7 @@ system, and keeps a backup so you can undo.
 - **Clipboard auto-optimize.** The tray daemon optimizes images as you copy them
   and puts the smaller version back on the clipboard.
 - **Dolphin integration.** An "Optimize with Klop" entry in the right-click menu
-  for PNG, JPEG, GIF, and WebP files.
+  for PNG, JPEG, GIF, and WebP images and MP4, MOV, MKV, and WebM videos.
 - **Live progress.** While `klop optimize` runs, a Plasma progress card shows the
   current file and how many are done, then turns into the result summary. The
   panel widget shows the percentage too, and a terminal run draws a bar. Videos

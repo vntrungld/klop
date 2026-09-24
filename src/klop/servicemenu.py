@@ -15,8 +15,18 @@ from pathlib import Path
 _ASSET_ICON = Path(__file__).parent / "assets" / "tray.svg"
 _FILE_NAME = "klop-optimize.desktop"
 
-# Raster image types klop optimizes today (video/PDF/HEIC are later milestones).
-_MIME_TYPES = ("image/png", "image/jpeg", "image/gif", "image/webp")
+# Media types klop optimizes from the file manager (see media._EXT_MAP).
+_MIME_TYPES = (
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "video/mp4",
+    "video/quicktime",
+    "video/matroska",
+    "video/x-matroska",  # older shared-mime-info name
+    "video/webm",
+)
 
 
 def _default_icon() -> str:

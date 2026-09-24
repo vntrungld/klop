@@ -255,7 +255,7 @@ def _cmd_install_dolphin(_args) -> int:
 
     dest = install()
     print(f"installed Dolphin service menu: {dest}")
-    print("Right-click an image in Dolphin → 'Optimize with Klop'.")
+    print("Right-click an image or video in Dolphin → 'Optimize with Klop'.")
     print("If it doesn't appear yet, restart Dolphin (or run kbuildsycoca6).")
     return 0
 
