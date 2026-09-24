@@ -1,4 +1,4 @@
-# Clop-KDE M2 — Clipboard Auto-Optimize Implementation Plan
+# Klop M2 — Clipboard Auto-Optimize Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -19,13 +19,13 @@
 - **Only replace if smaller** by at least `Config.min_bytes_saved`; otherwise leave the clipboard untouched and send no notification.
 - **Clipboard reads/writes on the GUI thread; the pngquant subprocess on a worker thread.**
 - **Gated by the tray Enabled toggle and a `clipboard_watch` config flag** (default True).
-- **Commit message format:** first line `{Action}: {desc}` where Action ∈ {Update, Fix, WIP, Hotfix}, imperative, <72 chars; blank line; body; `Co-Authored-By: Claude <noreply@anthropic.com>` trailer. Commit with `git -c user.name='Clop-KDE' -c user.email='vn.trungld@gmail.com' commit`.
+- **Commit message format:** first line `{Action}: {desc}` where Action ∈ {Update, Fix, WIP, Hotfix}, imperative, <72 chars; blank line; body; `Co-Authored-By: Claude <noreply@anthropic.com>` trailer. Commit with `git -c user.name='Klop' -c user.email='vn.trungld@gmail.com' commit`.
 - **Dev commands:** `.venv/bin/pytest`, `.venv/bin/pip`. Current suite baseline: 65 tests passing.
 
 ## File Structure
 
 ```
-src/clop_kde/
+src/klop/
 ├── clipboard.py     # NEW: image_to_png_bytes, content_hash, optimize_image_bytes,
 │                    #      ClipboardResult, ClipboardWatcher  (daemon-only; imports Qt)
 ├── notifier.py      # MODIFY: generalize undo to a per-notification callback (add notify())
@@ -45,11 +45,11 @@ tests/
 ## Task 1: Generalize the Notifier undo to a per-notification callback
 
 **Files:**
-- Modify: `src/clop_kde/notifier.py` (the `Notifier` class only; leave `DBusNotificationBackend` untouched)
+- Modify: `src/klop/notifier.py` (the `Notifier` class only; leave `DBusNotificationBackend` untouched)
 - Modify: `tests/test_notifier.py` (add new tests; existing tests stay unchanged and green)
 
 **Interfaces:**
-- Consumes: `clop_kde.format.human_size`, `percent_saved`; `clop_kde.job.JobResult`, `JobStatus`.
+- Consumes: `klop.format.human_size`, `percent_saved`; `klop.job.JobResult`, `JobStatus`.
 - Produces:
   - `Notifier.__init__(self, backend, undo_fn=None, icon="", parent=None)` — `undo_fn` now optional.
   - `Notifier.notify(self, summary, body, *, undo=None, undo_confirm=None, icon=None) -> int` —
@@ -103,7 +103,7 @@ def test_generic_notify_undo_is_one_shot():
 Run: `.venv/bin/pytest tests/test_notifier.py -k generic -v`
 Expected: FAIL — `Notifier` has no `notify` method (AttributeError), and `Notifier(backend=backend)` fails because `undo_fn` is currently required.
 
-- [ ] **Step 3: Rewrite the `Notifier` class in `src/clop_kde/notifier.py`**
+- [ ] **Step 3: Rewrite the `Notifier` class in `src/klop/notifier.py`**
 
 Replace the entire `Notifier` class (lines 24-62, from `class Notifier(QObject):` through the end of `_on_closed`) with:
 
@@ -180,7 +180,7 @@ Expected: all pass (68 = 65 + 3).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/notifier.py tests/test_notifier.py
+git add src/klop/notifier.py tests/test_notifier.py
 git commit -m "Update: generalize notifier undo to a per-notification callback
 
 Add Notifier.notify(summary, body, undo=..., undo_confirm=...) storing a
@@ -196,12 +196,12 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 2: Byte-level image optimization (`clipboard.py`)
 
 **Files:**
-- Create: `src/clop_kde/clipboard.py`
+- Create: `src/klop/clipboard.py`
 - Test: `tests/test_clipboard.py`
 
 **Interfaces:**
-- Consumes: `clop_kde.media.MediaType`, `clop_kde.optimizers.select_optimizer`,
-  `clop_kde.engine._default_runner`, `clop_kde.config.Config`.
+- Consumes: `klop.media.MediaType`, `klop.optimizers.select_optimizer`,
+  `klop.engine._default_runner`, `klop.config.Config`.
 - Produces:
   - `clip.image_to_png_bytes(image: QImage) -> bytes` — serialize a QImage to PNG bytes.
   - `clip.content_hash(png_bytes: bytes) -> str` — sha1 hex digest.
@@ -216,8 +216,8 @@ from pathlib import Path
 
 import pytest
 
-from clop_kde.clipboard import content_hash, image_to_png_bytes, optimize_image_bytes
-from clop_kde.config import Config
+from klop.clipboard import content_hash, image_to_png_bytes, optimize_image_bytes
+from klop.config import Config
 
 
 def test_content_hash_stable_and_distinct():
@@ -291,9 +291,9 @@ def test_optimize_real_pngquant(qapp):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_clipboard.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.clipboard'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.clipboard'`.
 
-- [ ] **Step 3: Create `src/clop_kde/clipboard.py`**
+- [ ] **Step 3: Create `src/klop/clipboard.py`**
 
 ```python
 from __future__ import annotations
@@ -362,7 +362,7 @@ Expected: all pass (75 = 68 + 7).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/clipboard.py tests/test_clipboard.py
+git add src/klop/clipboard.py tests/test_clipboard.py
 git commit -m "Update: add byte-level PNG optimization for the clipboard
 
 Add clipboard.py with image_to_png_bytes, content_hash, and
@@ -379,7 +379,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 3: ClipboardWatcher (`clipboard.py`)
 
 **Files:**
-- Modify: `src/clop_kde/clipboard.py` (append `ClipboardResult` and `ClipboardWatcher`)
+- Modify: `src/klop/clipboard.py` (append `ClipboardResult` and `ClipboardWatcher`)
 - Test: `tests/test_clipboard.py` (append watcher tests)
 
 **Interfaces:**
@@ -400,7 +400,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ```python
 from PySide6.QtCore import QByteArray, QMimeData, QObject, Signal
 
-from clop_kde.clipboard import ClipboardResult, ClipboardWatcher
+from klop.clipboard import ClipboardResult, ClipboardWatcher
 
 
 class FakeClipboard(QObject):
@@ -514,7 +514,7 @@ def test_watcher_undo_restores_original(qapp):
 Run: `.venv/bin/pytest tests/test_clipboard.py -k watcher -v`
 Expected: FAIL — `ClipboardWatcher` / `ClipboardResult` are not defined yet (ImportError).
 
-- [ ] **Step 3: Append to `src/clop_kde/clipboard.py`**
+- [ ] **Step 3: Append to `src/klop/clipboard.py`**
 
 Add these imports to the existing import block at the top of the file:
 
@@ -652,7 +652,7 @@ Expected: all pass (80 = 75 + 5).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/clipboard.py tests/test_clipboard.py
+git add src/klop/clipboard.py tests/test_clipboard.py
 git commit -m "Update: add ClipboardWatcher with loop-prevention and undo
 
 Add ClipboardWatcher: on clipboard image changes it optimizes PNG bytes
@@ -669,8 +669,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 4: Tray `record_saved` + `clipboard_watch` config flag
 
 **Files:**
-- Modify: `src/clop_kde/app.py` (extract `record_saved`)
-- Modify: `src/clop_kde/config.py` (add `clipboard_watch`)
+- Modify: `src/klop/app.py` (extract `record_saved`)
+- Modify: `src/klop/config.py` (add `clipboard_watch`)
 - Test: `tests/test_app.py` (add `record_saved` tests)
 - Test: `tests/test_config.py` (add `clipboard_watch` tests)
 
@@ -702,14 +702,14 @@ Append to `tests/test_config.py`:
 
 ```python
 def test_clipboard_watch_defaults_true(tmp_path):
-    from clop_kde.config import load_config
+    from klop.config import load_config
 
     cfg = load_config(tmp_path / "nope.toml")
     assert cfg.clipboard_watch is True
 
 
 def test_clipboard_watch_can_be_disabled(tmp_path):
-    from clop_kde.config import load_config
+    from klop.config import load_config
 
     p = tmp_path / "config.toml"
     p.write_text("clipboard_watch = false\n")
@@ -721,7 +721,7 @@ def test_clipboard_watch_can_be_disabled(tmp_path):
 Run: `.venv/bin/pytest tests/test_app.py -k record_saved tests/test_config.py -k clipboard_watch -v`
 Expected: FAIL — `TrayApp` has no `record_saved` (AttributeError) and `Config` has no `clipboard_watch` (AttributeError).
 
-- [ ] **Step 3: Add `clipboard_watch` to `src/clop_kde/config.py`**
+- [ ] **Step 3: Add `clipboard_watch` to `src/klop/config.py`**
 
 In the `Config` dataclass, add the field after `backup_max_bytes`:
 
@@ -729,7 +729,7 @@ In the `Config` dataclass, add the field after `backup_max_bytes`:
     clipboard_watch: bool = True
 ```
 
-- [ ] **Step 4: Extract `record_saved` in `src/clop_kde/app.py`**
+- [ ] **Step 4: Extract `record_saved` in `src/klop/app.py`**
 
 Replace the `_on_job_done` method (lines 88-92) with:
 
@@ -757,7 +757,7 @@ Expected: all pass (83 = 80 + 3).
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/clop_kde/app.py src/clop_kde/config.py tests/test_app.py tests/test_config.py
+git add src/klop/app.py src/klop/config.py tests/test_app.py tests/test_config.py
 git commit -m "Update: add TrayApp.record_saved and clipboard_watch config
 
 Extract the tray savings-total update into a public record_saved() so both
@@ -773,7 +773,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 5: Wire the ClipboardWatcher into the daemon
 
 **Files:**
-- Modify: `src/clop_kde/daemon.py` (construct + wire the watcher; return a 4-tuple)
+- Modify: `src/klop/daemon.py` (construct + wire the watcher; return a 4-tuple)
 - Test: `tests/test_daemon.py` (update 3-tuple unpacks to 4-tuple; add clipboard-wiring tests)
 
 **Interfaces:**
@@ -792,7 +792,7 @@ Change the two existing tests' unpacking from `tray, queue, notifier = build_dae
 `tray, queue, notifier, _watcher = build_daemon(...)`. Then append:
 
 ```python
-from clop_kde.clipboard import ClipboardResult
+from klop.clipboard import ClipboardResult
 
 
 def test_build_daemon_wires_clipboard_watcher(qapp, monkeypatch):
@@ -846,8 +846,8 @@ def test_build_daemon_enabled_toggle_controls_watcher(qapp):
 
 
 def test_build_daemon_no_watcher_when_disabled(qapp, monkeypatch):
-    import clop_kde.daemon as daemon_mod
-    from clop_kde.config import Config
+    import klop.daemon as daemon_mod
+    from klop.config import Config
 
     monkeypatch.setattr(daemon_mod, "load_config", lambda: Config(clipboard_watch=False))
     tray, queue, notifier, watcher = build_daemon(qapp, engine=FakeEngine(), backend=FakeBackend())
@@ -859,7 +859,7 @@ def test_build_daemon_no_watcher_when_disabled(qapp, monkeypatch):
 Run: `.venv/bin/pytest tests/test_daemon.py -v`
 Expected: FAIL — `build_daemon` still returns a 3-tuple (the new 4-tuple unpacks raise ValueError) and does not construct a watcher.
 
-- [ ] **Step 3: Rewrite `src/clop_kde/daemon.py`**
+- [ ] **Step 3: Rewrite `src/klop/daemon.py`**
 
 ```python
 from __future__ import annotations
@@ -937,7 +937,7 @@ Expected: PASS (the two updated M1 tests + 3 new clipboard tests).
 
 - [ ] **Step 5: Confirm the headless CLI is still Qt-free**
 
-Run: `.venv/bin/python -c "import sys, clop_kde.cli; assert 'PySide6' not in sys.modules; print('cli Qt-free: OK')"`
+Run: `.venv/bin/python -c "import sys, klop.cli; assert 'PySide6' not in sys.modules; print('cli Qt-free: OK')"`
 Expected: prints `cli Qt-free: OK` (daemon.py and clipboard.py import Qt, but cli.py imports them only lazily inside `_cmd_daemon`).
 
 - [ ] **Step 6: Run the full suite**
@@ -947,7 +947,7 @@ Expected: all pass (86 = 83 + 3).
 
 - [ ] **Step 7: Manual smoke test (interactive — perform in a Plasma session)**
 
-Run: `.venv/bin/clop-kde daemon`
+Run: `.venv/bin/klop daemon`
 Then copy a large screenshot (e.g. via Spectacle) or an image from a browser. Confirm: a
 notification appears reporting the savings with an **Undo** button; pasting into an app that saves
 the image (or re-copying) yields the smaller image; clicking **Undo** restores the original so the
@@ -958,7 +958,7 @@ wiring and this step was skipped.)
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/clop_kde/daemon.py tests/test_daemon.py
+git add src/klop/daemon.py tests/test_daemon.py
 git commit -m "Update: wire ClipboardWatcher into the daemon
 
 build_daemon now constructs a ClipboardWatcher (when clipboard_watch is

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Wire up optimizers for every media type `clop-kde` already detects but does not yet optimize — GIF, WebP, PDF, Video, HEIC — including extension-changing conversions (HEIC→JPEG, non-mp4 video→MP4).
+**Goal:** Wire up optimizers for every media type `klop` already detects but does not yet optimize — GIF, WebP, PDF, Video, HEIC — including extension-changing conversions (HEIC→JPEG, non-mp4 video→MP4).
 
 **Architecture:** Add same-extension optimizers (gifsicle, cwebp/vips, ghostscript) that drop straight into the existing in-place engine, plus convert optimizers (ffmpeg→mp4, vips→jpg) enabled by a new `output_ext` field on `Optimizer` and a convert-aware replace branch in the engine that backs up the original, writes a non-clobbering destination, and drops the source.
 
@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- **Commit message format:** first line `{Action}: {desc}` where Action ∈ {Update, Fix, WIP, Hotfix}, imperative, <72 chars; blank line; body wrapped at 72; `Co-Authored-By: Claude <noreply@anthropic.com>` trailer. Commit with `git -c user.name='Clop-KDE' -c user.email='vn.trungld@gmail.com' commit`.
+- **Commit message format:** first line `{Action}: {desc}` where Action ∈ {Update, Fix, WIP, Hotfix}, imperative, <72 chars; blank line; body wrapped at 72; `Co-Authored-By: Claude <noreply@anthropic.com>` trailer. Commit with `git -c user.name='Klop' -c user.email='vn.trungld@gmail.com' commit`.
 - **All external tools are optional** and resolved via `capabilities.detect_capabilities`. A media type whose tool is absent must fall through to the existing `SKIPPED` result with the "install <tool>" hint — never crash.
 - **Engine safety invariants (unchanged):** write to a temp file in the source's directory; only replace when the result is smaller by at least `config.min_bytes_saved`; back up the original before replacing; atomic `os.replace` within the same directory.
 - **Test runner:** `pytest` from the repo root. All new pure-Python logic is tested with fake runners (no real CLI needed); real-CLI tests are guarded with `@pytest.mark.skipif(not shutil.which(...))`.
@@ -19,12 +19,12 @@
 
 ## File Structure
 
-- `src/clop_kde/config.py` — add six optimizer knobs (Task 1).
-- `src/clop_kde/paths.py` — **new**; shared `dedup(path)` helper (Task 2).
-- `src/clop_kde/webfetch.py` — import shared `dedup`, drop the private copy (Task 2).
-- `src/clop_kde/optimizers.py` — new builders + registry entries; `output_ext` field (Tasks 3, 4).
-- `src/clop_kde/engine.py` — convert-aware replace branch (Task 5).
-- `src/clop_kde/plasmoid_pkg/contents/ui/ConfigGeneral.qml` — form controls for new knobs (Task 6).
+- `src/klop/config.py` — add six optimizer knobs (Task 1).
+- `src/klop/paths.py` — **new**; shared `dedup(path)` helper (Task 2).
+- `src/klop/webfetch.py` — import shared `dedup`, drop the private copy (Task 2).
+- `src/klop/optimizers.py` — new builders + registry entries; `output_ext` field (Tasks 3, 4).
+- `src/klop/engine.py` — convert-aware replace branch (Task 5).
+- `src/klop/plasmoid_pkg/contents/ui/ConfigGeneral.qml` — form controls for new knobs (Task 6).
 - Tests: `tests/test_config.py`, `tests/test_paths.py` (new), `tests/test_optimizers.py`, `tests/test_engine.py`.
 
 ---
@@ -32,7 +32,7 @@
 ## Task 1: Config knobs for the new optimizers
 
 **Files:**
-- Modify: `src/clop_kde/config.py:10-20` (the `Config` dataclass)
+- Modify: `src/klop/config.py:10-20` (the `Config` dataclass)
 - Test: `tests/test_config.py`
 
 **Interfaces:**
@@ -44,7 +44,7 @@ Add to `tests/test_config.py`:
 
 ```python
 def test_new_optimizer_knobs_have_defaults():
-    from clop_kde.config import Config
+    from klop.config import Config
     c = Config()
     assert c.webp_quality == 80
     assert c.gif_lossy == 0
@@ -55,7 +55,7 @@ def test_new_optimizer_knobs_have_defaults():
 
 
 def test_new_knobs_round_trip_through_toml(tmp_path):
-    from clop_kde.config import Config, save_config, load_config
+    from klop.config import Config, save_config, load_config
     path = tmp_path / "config.toml"
     save_config(Config(webp_quality=70, video_crf=30, pdf_setting="screen"), path)
     loaded = load_config(path)
@@ -65,7 +65,7 @@ def test_new_knobs_round_trip_through_toml(tmp_path):
 
 
 def test_new_knobs_apply_overrides():
-    from clop_kde.config import Config, apply_overrides
+    from klop.config import Config, apply_overrides
     c = apply_overrides(Config(), {"video_crf": "23", "video_codec": "libx265"})
     assert c.video_crf == 23
     assert c.video_codec == "libx265"
@@ -78,7 +78,7 @@ Expected: FAIL with `AttributeError` / `TypeError` (fields not defined).
 
 - [ ] **Step 3: Add the fields**
 
-In `src/clop_kde/config.py`, extend the `Config` dataclass (insert after `jpeg_max_quality`):
+In `src/klop/config.py`, extend the `Config` dataclass (insert after `jpeg_max_quality`):
 
 ```python
 @dataclass(frozen=True)
@@ -108,8 +108,8 @@ Expected: PASS (new tests plus all existing config tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/clop_kde/config.py tests/test_config.py
-git -c user.name='Clop-KDE' -c user.email='vn.trungld@gmail.com' commit -m "Update: add config knobs for gif/webp/pdf/video optimizers
+git add src/klop/config.py tests/test_config.py
+git -c user.name='Klop' -c user.email='vn.trungld@gmail.com' commit -m "Update: add config knobs for gif/webp/pdf/video optimizers
 
 Add webp_quality, gif_lossy, pdf_setting, video_crf, video_codec, and
 video_preset to Config. Load/save/config-set coercion is field-driven
@@ -123,19 +123,19 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 2: Shared `dedup` path helper
 
 **Files:**
-- Create: `src/clop_kde/paths.py`
-- Modify: `src/clop_kde/webfetch.py:65-73` (remove `_dedup`), `:98` (call site)
+- Create: `src/klop/paths.py`
+- Modify: `src/klop/webfetch.py:65-73` (remove `_dedup`), `:98` (call site)
 - Test: `tests/test_paths.py`
 
 **Interfaces:**
-- Produces: `clop_kde.paths.dedup(path: Path) -> Path` — returns `path` if it does not exist, else the first free `"{stem}-{i}{suffix}"` (i from 1). Consumed by `webfetch` (Task 2) and `engine` (Task 5).
+- Produces: `klop.paths.dedup(path: Path) -> Path` — returns `path` if it does not exist, else the first free `"{stem}-{i}{suffix}"` (i from 1). Consumed by `webfetch` (Task 2) and `engine` (Task 5).
 
 - [ ] **Step 1: Write the failing test**
 
 Create `tests/test_paths.py`:
 
 ```python
-from clop_kde.paths import dedup
+from klop.paths import dedup
 
 
 def test_dedup_returns_path_when_free(tmp_path):
@@ -157,11 +157,11 @@ def test_dedup_skips_multiple_collisions(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_paths.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.paths'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.paths'`.
 
 - [ ] **Step 3: Create the shared helper**
 
-Create `src/clop_kde/paths.py`:
+Create `src/klop/paths.py`:
 
 ```python
 from __future__ import annotations
@@ -183,7 +183,7 @@ def dedup(path: Path) -> Path:
 
 - [ ] **Step 4: Point `webfetch` at the shared helper**
 
-In `src/clop_kde/webfetch.py`, delete the `_dedup` function (lines 65-73) and add an import near the top (with the other `from .` imports):
+In `src/klop/webfetch.py`, delete the `_dedup` function (lines 65-73) and add an import near the top (with the other `from .` imports):
 
 ```python
 from .paths import dedup
@@ -209,10 +209,10 @@ Expected: PASS (new paths tests plus existing webfetch tests still green).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/paths.py src/clop_kde/webfetch.py tests/test_paths.py
-git -c user.name='Clop-KDE' -c user.email='vn.trungld@gmail.com' commit -m "Update: extract shared dedup path helper
+git add src/klop/paths.py src/klop/webfetch.py tests/test_paths.py
+git -c user.name='Klop' -c user.email='vn.trungld@gmail.com' commit -m "Update: extract shared dedup path helper
 
-Promote webfetch._dedup to clop_kde.paths.dedup so the engine's
+Promote webfetch._dedup to klop.paths.dedup so the engine's
 convert path can reuse the same non-clobbering rename logic.
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
@@ -223,7 +223,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 3: Same-extension optimizers (GIF, WebP, PDF)
 
 **Files:**
-- Modify: `src/clop_kde/optimizers.py` (new builders + `_REGISTRY` entries)
+- Modify: `src/klop/optimizers.py` (new builders + `_REGISTRY` entries)
 - Test: `tests/test_optimizers.py`
 
 **Interfaces:**
@@ -232,11 +232,11 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing tests**
 
-Add to `tests/test_optimizers.py` (extend the import from `clop_kde.optimizers` to include `GIFSICLE, CWEBP, VIPS_WEBP, GS`):
+Add to `tests/test_optimizers.py` (extend the import from `klop.optimizers` to include `GIFSICLE, CWEBP, VIPS_WEBP, GS`):
 
 ```python
 def test_gifsicle_command_shape():
-    from clop_kde.optimizers import GIFSICLE
+    from klop.optimizers import GIFSICLE
     cfg = Config(gif_lossy=0)
     cmd = GIFSICLE.build_command(Path("/in.gif"), Path("/out.gif"), cfg)
     assert cmd[0] == "gifsicle"
@@ -248,13 +248,13 @@ def test_gifsicle_command_shape():
 
 
 def test_gifsicle_lossy_flag_when_enabled():
-    from clop_kde.optimizers import GIFSICLE
+    from klop.optimizers import GIFSICLE
     cmd = GIFSICLE.build_command(Path("/in.gif"), Path("/out.gif"), Config(gif_lossy=30))
     assert "--lossy=30" in cmd
 
 
 def test_cwebp_command_shape():
-    from clop_kde.optimizers import CWEBP
+    from klop.optimizers import CWEBP
     cmd = CWEBP.build_command(Path("/in.webp"), Path("/out.webp"), Config(webp_quality=70))
     assert cmd[0] == "cwebp"
     assert cmd[cmd.index("-q") + 1] == "70"
@@ -263,7 +263,7 @@ def test_cwebp_command_shape():
 
 
 def test_vips_webp_command_shape():
-    from clop_kde.optimizers import VIPS_WEBP
+    from klop.optimizers import VIPS_WEBP
     cmd = VIPS_WEBP.build_command(Path("/in.webp"), Path("/out.webp"), Config(webp_quality=65))
     assert cmd[0] == "vips"
     assert cmd[1] == "copy"
@@ -273,7 +273,7 @@ def test_vips_webp_command_shape():
 
 
 def test_gs_command_shape():
-    from clop_kde.optimizers import GS
+    from klop.optimizers import GS
     cmd = GS.build_command(Path("/in.pdf"), Path("/out.pdf"), Config(pdf_setting="screen"))
     assert cmd[0] == "gs"
     assert "-dPDFSETTINGS=/screen" in cmd
@@ -282,13 +282,13 @@ def test_gs_command_shape():
 
 
 def test_gs_unknown_setting_falls_back_to_ebook():
-    from clop_kde.optimizers import GS
+    from klop.optimizers import GS
     cmd = GS.build_command(Path("/in.pdf"), Path("/out.pdf"), Config(pdf_setting="bogus"))
     assert "-dPDFSETTINGS=/ebook" in cmd
 
 
 def test_select_new_same_ext_optimizers():
-    from clop_kde.optimizers import GIFSICLE, CWEBP, VIPS_WEBP, GS
+    from klop.optimizers import GIFSICLE, CWEBP, VIPS_WEBP, GS
     caps = {"gifsicle": "/x", "cwebp": "/x", "vips": "/x", "gs": "/x"}
     assert select_optimizer(MediaType.GIF, caps, Config()) is GIFSICLE
     assert select_optimizer(MediaType.WEBP, caps, Config()) is CWEBP
@@ -304,7 +304,7 @@ Expected: FAIL with `ImportError` (names not defined).
 
 - [ ] **Step 3: Implement the builders and register them**
 
-In `src/clop_kde/optimizers.py`, add the builders after `_jpegoptim_cmd`:
+In `src/klop/optimizers.py`, add the builders after `_jpegoptim_cmd`:
 
 ```python
 def _gifsicle_cmd(inp: Path, out: Path, cfg: Config) -> list[str]:
@@ -370,8 +370,8 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/clop_kde/optimizers.py tests/test_optimizers.py
-git -c user.name='Clop-KDE' -c user.email='vn.trungld@gmail.com' commit -m "Update: add gifsicle/cwebp/vips/gs same-extension optimizers
+git add src/klop/optimizers.py tests/test_optimizers.py
+git -c user.name='Klop' -c user.email='vn.trungld@gmail.com' commit -m "Update: add gifsicle/cwebp/vips/gs same-extension optimizers
 
 Register GIF (gifsicle -O3), WebP (cwebp, vips fallback), and PDF
 (ghostscript) optimizers. All keep the source extension, so they run
@@ -385,7 +385,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 4: Convert optimizers + `output_ext` field (Video, HEIC)
 
 **Files:**
-- Modify: `src/clop_kde/optimizers.py` (add `output_ext` to `Optimizer`; new builders + registry)
+- Modify: `src/klop/optimizers.py` (add `output_ext` to `Optimizer`; new builders + registry)
 - Test: `tests/test_optimizers.py`
 
 **Interfaces:**
@@ -397,7 +397,7 @@ Add to `tests/test_optimizers.py`:
 
 ```python
 def test_ffmpeg_command_shape_and_output_ext():
-    from clop_kde.optimizers import FFMPEG
+    from klop.optimizers import FFMPEG
     cfg = Config(video_crf=30, video_codec="libx264", video_preset="fast")
     cmd = FFMPEG.build_command(Path("/in.mkv"), Path("/out.mp4"), cfg)
     assert cmd[0] == "ffmpeg"
@@ -410,7 +410,7 @@ def test_ffmpeg_command_shape_and_output_ext():
 
 
 def test_vips_heic_command_shape_and_output_ext():
-    from clop_kde.optimizers import VIPS_HEIC
+    from klop.optimizers import VIPS_HEIC
     cmd = VIPS_HEIC.build_command(Path("/in.heic"), Path("/out.jpg"), Config(jpeg_max_quality=75))
     assert cmd[0] == "vips"
     assert cmd[1] == "copy"
@@ -426,7 +426,7 @@ def test_existing_optimizers_default_output_ext_none():
 
 
 def test_select_convert_optimizers():
-    from clop_kde.optimizers import FFMPEG, VIPS_HEIC
+    from klop.optimizers import FFMPEG, VIPS_HEIC
     caps = {"ffmpeg": "/x", "vips": "/x"}
     assert select_optimizer(MediaType.VIDEO, caps, Config()) is FFMPEG
     assert select_optimizer(MediaType.HEIC, caps, Config()) is VIPS_HEIC
@@ -439,7 +439,7 @@ Expected: FAIL with `ImportError` / `AttributeError` (no `output_ext`, names mis
 
 - [ ] **Step 3: Add the field and the convert optimizers**
 
-In `src/clop_kde/optimizers.py`, add `output_ext` to the dataclass:
+In `src/klop/optimizers.py`, add `output_ext` to the dataclass:
 
 ```python
 @dataclass(frozen=True)
@@ -501,8 +501,8 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/clop_kde/optimizers.py tests/test_optimizers.py
-git -c user.name='Clop-KDE' -c user.email='vn.trungld@gmail.com' commit -m "Update: add ffmpeg/vips convert optimizers with output_ext
+git add src/klop/optimizers.py tests/test_optimizers.py
+git -c user.name='Klop' -c user.email='vn.trungld@gmail.com' commit -m "Update: add ffmpeg/vips convert optimizers with output_ext
 
 Add an output_ext field to Optimizer and register the two conversions:
 video normalizes to .mp4 (ffmpeg H.264) and HEIC converts to .jpg
@@ -516,11 +516,11 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 5: Engine convert-aware replace path
 
 **Files:**
-- Modify: `src/clop_kde/engine.py:50-91` (temp suffix + replace branch)
+- Modify: `src/klop/engine.py:50-91` (temp suffix + replace branch)
 - Test: `tests/test_engine.py`
 
 **Interfaces:**
-- Consumes: `Optimizer.output_ext` (Task 4); `clop_kde.paths.dedup` (Task 2).
+- Consumes: `Optimizer.output_ext` (Task 4); `klop.paths.dedup` (Task 2).
 - Produces: for a convert optimizer, `Engine.optimize` backs up the source, writes to `dedup(source.with_suffix(output_ext))`, unlinks the original, and returns `JobResult(status=OPTIMIZED, path=<new dest>, backup_id=...)`. Same-extension optimizers behave exactly as before.
 
 - [ ] **Step 1: Write the failing tests**
@@ -597,7 +597,7 @@ Expected: FAIL — current engine uses `source.suffix` for the temp and always r
 
 - [ ] **Step 3: Implement the convert-aware branch**
 
-In `src/clop_kde/engine.py`, add the import near the top (with the other `from .` imports):
+In `src/klop/engine.py`, add the import near the top (with the other `from .` imports):
 
 ```python
 from .paths import dedup
@@ -669,8 +669,8 @@ Expected: PASS — the three new convert tests plus all existing same-extension 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/clop_kde/engine.py tests/test_engine.py
-git -c user.name='Clop-KDE' -c user.email='vn.trungld@gmail.com' commit -m "Update: add convert-aware replace path to engine
+git add src/klop/engine.py tests/test_engine.py
+git -c user.name='Klop' -c user.email='vn.trungld@gmail.com' commit -m "Update: add convert-aware replace path to engine
 
 When an optimizer declares output_ext, the engine now writes the temp
 with the target extension, backs up the original, writes to a
@@ -685,10 +685,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 6: Plasmoid config form controls
 
 **Files:**
-- Modify: `src/clop_kde/plasmoid_pkg/contents/ui/ConfigGeneral.qml`
+- Modify: `src/klop/plasmoid_pkg/contents/ui/ConfigGeneral.qml`
 
 **Interfaces:**
-- Consumes: `clop-kde config get --json` (already emits the new keys after Task 1) and `clop-kde config set key=value`.
+- Consumes: `klop config get --json` (already emits the new keys after Task 1) and `klop config set key=value`.
 - Produces: form controls for `webp_quality`, `gif_lossy`, `pdf_setting`, `video_crf`, `video_codec`, `video_preset`, wired into `saveConfig()` and `Component.onCompleted`.
 
 - [ ] **Step 1: Add the controls to the FormLayout**
@@ -754,24 +754,24 @@ In the JSON callback (after `jpegMax.value = c.jpeg_max_quality;`), add:
 
 - [ ] **Step 4: Validate QML syntax**
 
-Run: `qmllint src/clop_kde/plasmoid_pkg/contents/ui/ConfigGeneral.qml`
+Run: `qmllint src/klop/plasmoid_pkg/contents/ui/ConfigGeneral.qml`
 Expected: no syntax errors. (If `qmllint` is not installed, skip — it is a lint, not a hard gate; the import warnings for `org.kde.*` modules are expected outside a Plasma session.)
 
 - [ ] **Step 5: Smoke-test the round trip via the CLI backing the form**
 
-`config get|set` have no path flag — they resolve `~/.config/clop-kde/config.toml` from `HOME`, so redirect `HOME` to a temp dir to avoid touching the real config:
+`config get|set` have no path flag — they resolve `~/.config/klop/config.toml` from `HOME`, so redirect `HOME` to a temp dir to avoid touching the real config:
 
 ```bash
-HOME=/tmp/clop-smoke python -m clop_kde.cli config set webp_quality=70 pdf_setting=screen video_codec=libx265
-HOME=/tmp/clop-smoke python -m clop_kde.cli config get --json
+HOME=/tmp/clop-smoke python -m klop.cli config set webp_quality=70 pdf_setting=screen video_codec=libx265
+HOME=/tmp/clop-smoke python -m klop.cli config get --json
 ```
 Expected: the JSON includes `"webp_quality": 70`, `"pdf_setting": "screen"`, `"video_codec": "libx265"`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/plasmoid_pkg/contents/ui/ConfigGeneral.qml
-git -c user.name='Clop-KDE' -c user.email='vn.trungld@gmail.com' commit -m "Update: add plasmoid form controls for new optimizer knobs
+git add src/klop/plasmoid_pkg/contents/ui/ConfigGeneral.qml
+git -c user.name='Klop' -c user.email='vn.trungld@gmail.com' commit -m "Update: add plasmoid form controls for new optimizer knobs
 
 Expose webp_quality, gif_lossy, pdf_setting, video_crf, video_codec,
 and video_preset in the plasmoid settings form, wired to config

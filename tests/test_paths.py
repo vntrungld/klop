@@ -1,4 +1,4 @@
-from clop_kde.paths import dedup
+from klop.paths import dedup
 
 
 def test_dedup_returns_path_when_free(tmp_path):

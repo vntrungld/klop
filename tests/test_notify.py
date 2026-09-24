@@ -1,6 +1,6 @@
 import subprocess
 
-from clop_kde import notify
+from klop import notify
 
 
 def test_send_notification_shells_out_to_gdbus_notify(monkeypatch):
@@ -12,7 +12,7 @@ def test_send_notification_shells_out_to_gdbus_notify(monkeypatch):
 
     monkeypatch.setattr(notify.subprocess, "run", fake_run)
 
-    nid = notify.send_notification("photo.jpg", "8.6KB → 3.4KB (-60%)", app_name="Clop-KDE")
+    nid = notify.send_notification("photo.jpg", "8.6KB → 3.4KB (-60%)", app_name="Klop")
 
     argv = calls["argv"]
     assert argv[0] == "gdbus" and "call" in argv

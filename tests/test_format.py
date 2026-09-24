@@ -1,4 +1,4 @@
-from clop_kde.format import human_size, percent_saved
+from klop.format import human_size, percent_saved
 
 
 def test_human_bytes():

@@ -31,7 +31,7 @@ def send_notification(
     *,
     actions: tuple[tuple[str, str], ...] = (),
     icon: str = "",
-    app_name: str = "Clop-KDE",
+    app_name: str = "Klop",
     timeout: float = 5,
 ) -> int:
     """Post a notification via ``gdbus call ... Notify``; return the daemon's
@@ -69,11 +69,11 @@ def send_notification(
     try:
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError) as exc:
-        print(f"clop-kde: Notify failed to invoke gdbus: {exc}", file=sys.stderr)
+        print(f"klop: Notify failed to invoke gdbus: {exc}", file=sys.stderr)
         return 0
     if proc.returncode != 0:
         print(
-            f"clop-kde: Notify failed: {proc.stderr.strip() or proc.stdout.strip()}",
+            f"klop: Notify failed: {proc.stderr.strip() or proc.stdout.strip()}",
             file=sys.stderr,
         )
         return 0
@@ -87,7 +87,7 @@ def wait_for_action(
     actions: tuple[tuple[str, str], ...],
     *,
     icon: str = "",
-    app_name: str = "Clop-KDE",
+    app_name: str = "Klop",
     timeout: float = 600,
 ) -> str | None:
     """Post a notification with action buttons and block until it closes;
@@ -105,6 +105,6 @@ def wait_for_action(
     try:
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError) as exc:
-        print(f"clop-kde: notify-send failed: {exc}", file=sys.stderr)
+        print(f"klop: notify-send failed: {exc}", file=sys.stderr)
         return None
     return proc.stdout.strip() or None

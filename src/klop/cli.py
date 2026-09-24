@@ -27,10 +27,10 @@ def _notify_icon() -> str:
 
 
 def _backup_root() -> Path:
-    override = os.environ.get("CLOP_KDE_BACKUP_DIR")
+    override = os.environ.get("KLOP_BACKUP_DIR")
     if override:
         return Path(override)
-    return Path.home() / ".local" / "share" / "clop-kde" / "backups"
+    return Path.home() / ".local" / "share" / "klop" / "backups"
 
 
 def _build_engine() -> Engine:
@@ -72,11 +72,11 @@ def _optimize_summary(
             body += f" · {others} unchanged"
         if errors:
             body += f" · {errors} failed"
-        return "Clop-KDE", body
+        return "Klop", body
     if errors:
-        return "Clop-KDE", f"{errors} file(s) failed to optimize"
+        return "Klop", f"{errors} file(s) failed to optimize"
     if others:
-        return "Clop-KDE", f"Nothing to optimize ({others} file(s) unchanged)"
+        return "Klop", f"Nothing to optimize ({others} file(s) unchanged)"
     return None
 
 
@@ -167,7 +167,7 @@ def _cmd_install_dolphin(_args) -> int:
 
     dest = install()
     print(f"installed Dolphin service menu: {dest}")
-    print("Right-click an image in Dolphin → 'Optimize with Clop'.")
+    print("Right-click an image in Dolphin → 'Optimize with Klop'.")
     print("If it doesn't appear yet, restart Dolphin (or run kbuildsycoca6).")
     return 0
 
@@ -271,7 +271,7 @@ def _spawn_saved_notification(path: Path, summary: str, body: str) -> None:
     counts the job as running until this process (and its pipes) finish."""
     try:
         subprocess.Popen(
-            [sys.executable, "-m", "clop_kde.cli", "notify-saved", str(path), summary, body],
+            [sys.executable, "-m", "klop.cli", "notify-saved", str(path), summary, body],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -322,7 +322,7 @@ def _cmd_daemon(_args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="clop-kde")
+    parser = argparse.ArgumentParser(prog="klop")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_opt = sub.add_parser("optimize", help="optimize one or more files")
@@ -362,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
     p_daemon.set_defaults(func=_cmd_daemon)
 
     p_install = sub.add_parser(
-        "install-dolphin", help="install the Dolphin right-click 'Optimize with Clop' menu"
+        "install-dolphin", help="install the Dolphin right-click 'Optimize with Klop' menu"
     )
     p_install.set_defaults(func=_cmd_install_dolphin)
 

@@ -1,4 +1,4 @@
-# Clop-KDE — In-Progress Indicator Design Spec
+# Klop — In-Progress Indicator Design Spec
 
 **Date:** 2026-07-13
 **Status:** Approved (design), pending implementation plan

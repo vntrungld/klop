@@ -1,4 +1,4 @@
-# Clop-KDE M2 — Clipboard Auto-Optimize Design Spec
+# Klop M2 — Clipboard Auto-Optimize Design Spec
 
 **Date:** 2026-07-13
 **Status:** Approved (design), pending implementation plan

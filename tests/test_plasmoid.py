@@ -1,4 +1,4 @@
-from clop_kde import plasmoid
+from klop import plasmoid
 
 
 def _fake_pkg(root):
@@ -20,13 +20,13 @@ def test_install_copies_package_and_bakes_backend_js(tmp_path):
     src = _fake_pkg(tmp_path / "src")
     dest = tmp_path / "out" / "org.trungld.klop"
 
-    result = plasmoid.install_plasmoid(src=src, dest_dir=dest, clop_bin="/opt/bin/clop-kde")
+    result = plasmoid.install_plasmoid(src=src, dest_dir=dest, klop_bin="/opt/bin/klop")
 
     assert result == dest
     assert (dest / "metadata.json").exists()
     assert (dest / "contents" / "ui" / "main.qml").exists()
     backend = (dest / "contents" / "code" / "backend.js").read_text()
-    assert 'var CLOP_BIN = "/opt/bin/clop-kde"' in backend
+    assert 'var KLOP_BIN = "/opt/bin/klop"' in backend
     assert ".pragma library" in backend
 
 
@@ -36,6 +36,6 @@ def test_install_replaces_existing_dest(tmp_path):
     dest.mkdir(parents=True)
     (dest / "stale.txt").write_text("old")  # must be gone after reinstall
 
-    plasmoid.install_plasmoid(src=src, dest_dir=dest, clop_bin="/opt/bin/clop-kde")
+    plasmoid.install_plasmoid(src=src, dest_dir=dest, klop_bin="/opt/bin/klop")
 
     assert not (dest / "stale.txt").exists()

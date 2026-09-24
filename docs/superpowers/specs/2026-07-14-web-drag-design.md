@@ -1,9 +1,9 @@
-# Clop-KDE — Web-Image Drag Design Spec
+# Klop — Web-Image Drag Design Spec
 
 **Date:** 2026-07-14
 **Status:** Approved (design), pending implementation plan
 **Sub-project D of the applet direction.** Builds on Sub-project C (the Klop plasmoid and its
-`clop-kde` CLI shell-out model), the M0 engine/backup, and the history store. Adds the ability
+`klop` CLI shell-out model), the M0 engine/backup, and the history store. Adds the ability
 to drag an image **from a web browser** onto the Klop panel icon and have it downloaded,
 optimized, saved, and copied to the clipboard.
 
@@ -11,7 +11,7 @@ optimized, saved, and copied to the clipboard.
 
 Today the plasmoid's drop handler keeps only local `file://` paths, so an image dragged from a
 browser (which arrives as an `http(s)://` URL, not a file) is silently ignored. This sub-project
-adds a new Qt-free CLI command `clop-kde optimize-url <url>` that downloads a remote image,
+adds a new Qt-free CLI command `klop optimize-url <url>` that downloads a remote image,
 optimizes it (in place, with a backup, reusing the existing `Engine`), saves it to a
 configurable folder, and copies the optimized result to the clipboard. The plasmoid's
 `onDropped` gains a branch: `file://` drops keep calling `optimize` (unchanged); `http(s)://`
@@ -25,7 +25,7 @@ drops call `optimize-url`.
   (`optimize-url`), so it is testable in Python and needs no running daemon.
 - Robust, safe fetching: http/https only, timeout, size cap, real-image validation by magic
   bytes, filename sanitization, never overwrite an existing file.
-- A new `web_drop_dir` config key (default `~/Pictures/Klop`), editable via `clop-kde config set`.
+- A new `web_drop_dir` config key (default `~/Pictures/Klop`), editable via `klop config set`.
 
 ## Non-Goals
 
@@ -46,8 +46,8 @@ drops call `optimize-url`.
 
 ```
 Browser image drag ─▶ Klop DropArea.onDropped
-   scheme file://  ─▶ clop-kde optimize <path>        (unchanged, Sub-project C)
-   scheme http(s)  ─▶ clop-kde optimize-url <url>     (NEW)
+   scheme file://  ─▶ klop optimize <path>        (unchanged, Sub-project C)
+   scheme http(s)  ─▶ klop optimize-url <url>     (NEW)
                           │  urllib download → temp
                           │  validate image (magic bytes)
                           │  save (dedup) → web_drop_dir
@@ -69,10 +69,10 @@ Isolates the non-engine concerns so `cli.py` stays thin and everything is unit-t
 - `download_image(url, *, dest_dir, fetcher=urllib_fetch, max_bytes=50*1024*1024, timeout=15) -> Path`
   - Rejects a non-`http`/`https` scheme with `ValueError`.
   - `fetcher(url, timeout)` returns `(content_bytes, final_url)` (injectable for tests; the
-    default uses `urllib.request` with `User-Agent: clop-kde` and the timeout). Reads at most
+    default uses `urllib.request` with `User-Agent: klop` and the timeout). Reads at most
     `max_bytes`; exceeding it raises `ValueError` ("image too large").
   - Validates the bytes are a real image via `media._detect_by_magic(header_bytes)` (the existing
-    byte-oriented magic-bytes helper in [media.py](../../../src/clop_kde/media.py)) on the first
+    byte-oriented magic-bytes helper in [media.py](../../../src/klop/media.py)) on the first
     32 bytes — a non-image (e.g. an HTML error page) yields no/`UNKNOWN` type and raises
     `ValueError`.
   - Computes the filename: basename of the URL path (query stripped); if it has no
@@ -119,7 +119,7 @@ Isolates the non-engine concerns so `cli.py` stays thin and everything is unit-t
   first line), treat that as a remote URL.
 - `if (localPaths.length) root.optimizePaths(localPaths)` (unchanged).
 - `if (remoteUrls.length) root.optimizeUrls(remoteUrls)` — new function: for each URL,
-  `exec.run(shquote(Backend.CLOP_BIN) + " optimize-url " + shquote(url), cb)`; `cb` calls
+  `exec.run(shquote(Backend.KLOP_BIN) + " optimize-url " + shquote(url), cb)`; `cb` calls
   `refreshHistory()` (the saved+optimized file shows up as a history row).
 
 ## Error handling

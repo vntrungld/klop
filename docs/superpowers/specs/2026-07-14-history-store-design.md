@@ -1,4 +1,4 @@
-# Clop-KDE — Optimization History Store Design Spec
+# Klop — Optimization History Store Design Spec
 
 **Date:** 2026-07-14
 **Status:** Approved (design), pending implementation plan
@@ -9,8 +9,8 @@ headless-daemon/bridge refactor (Sub-project B) comes after and does not block t
 ## Summary
 
 Record every optimization — **file** and **clipboard** — to a durable, queryable history at
-`~/.local/share/clop-kde/history.jsonl`: name, sizes, saved bytes, timestamp, kind, and (for
-files) the `backup_id` that makes it undoable. Expose it two ways: a new `clop-kde history
+`~/.local/share/klop/history.jsonl`: name, sizes, saved bytes, timestamp, kind, and (for
+files) the `backup_id` that makes it undoable. Expose it two ways: a new `klop history
 [--json]` command (the plasmoid's data source) and an in-process `HistoryStore` the daemon and
 CLI append to. **File** rows are undoable indefinitely (persistent disk backup); **clipboard**
 rows are **view-only**. As part of nailing down what is undoable, collapse the clipboard undo to
@@ -36,7 +36,7 @@ a **single most-recent slot** (see below).
   handler (clipboard, view-only).
 - Undo paths mark the corresponding file row undone: CLI `undo`, daemon overlay/notification
   file-undo.
-- `clop-kde history [--json]` reads the store — JSON array for the plasmoid, a human table
+- `klop history [--json]` reads the store — JSON array for the plasmoid, a human table
   otherwise.
 - Keep the headless CLI Qt-free (`history.py` imports no Qt).
 
@@ -71,8 +71,8 @@ A frozen dataclass, JSON-serializable:
 
 ## Component — `history.py` (`HistoryStore`), Qt-free
 
-- **Location:** `~/.local/share/clop-kde/history.jsonl`. Overridable via
-  `CLOP_KDE_HISTORY_FILE` (points at the file directly — tests set it to a tmp path).
+- **Location:** `~/.local/share/klop/history.jsonl`. Overridable via
+  `KLOP_HISTORY_FILE` (points at the file directly — tests set it to a tmp path).
 - Constructor `HistoryStore(path: Path | None = None)`; `None` → default resolved from env/home.
   Ensures the parent dir exists lazily on first write (does not create on read).
 
@@ -105,7 +105,7 @@ daemon clipboard    ─ optimized ─▶ handler → store.record("clipboard", "
                                                            None, orig, new, backup_id=None)
 daemon file undo    ─ overlay/notification Undo ─▶ store.mark_undone(backup_id)
 
-clop-kde history [--json] ─▶ store.entries() → print
+klop history [--json] ─▶ store.entries() → print
 ```
 
 ### `cli.py`
@@ -167,7 +167,7 @@ clop-kde history [--json] ─▶ store.entries() → print
 
 ## Testing strategy
 
-Headless, mostly pure Python (no Qt for `history.py`/CLI tests). Point `CLOP_KDE_HISTORY_FILE` at
+Headless, mostly pure Python (no Qt for `history.py`/CLI tests). Point `KLOP_HISTORY_FILE` at
 a `tmp_path` file.
 
 - **history.py:**
@@ -195,7 +195,7 @@ a `tmp_path` file.
   `optimized` records a `"clipboard"` row (path `None`, no `backup_id`); the wrapped file
   `undo_fn` calls both `engine.undo` and `store.mark_undone` (verified via fakes).
 - **Manual smoke (real session):** optimize a file via CLI and copy an image with the daemon
-  running; `clop-kde history` shows both, the file row marked undoable; `clop-kde undo <id>`
+  running; `klop history` shows both, the file row marked undoable; `klop undo <id>`
   then shows it undone; `history --json` parses.
 
 ## Dependencies

@@ -1,12 +1,12 @@
-# Clop-KDE M1 — Tray Daemon + Notifications Design Spec
+# Klop M1 — Tray Daemon + Notifications Design Spec
 
 **Date:** 2026-07-13
 **Status:** Approved (design), pending implementation plan
-**Builds on:** M0 (headless engine core) — see `2026-07-13-clop-kde-design.md`
+**Builds on:** M0 (headless engine core) — see `2026-07-13-klop-design.md`
 
 ## Summary
 
-M1 turns Clop-KDE from a headless CLI into a real background **daemon** with a KDE
+M1 turns Klop from a headless CLI into a real background **daemon** with a KDE
 system-tray presence. It adds a Qt event loop, a system-tray icon and menu, an
 off-GUI-thread optimization queue, and desktop notifications with an inline **Undo**
 action. It reuses the entire M0 engine unchanged — M1 is orchestration and UI around
@@ -18,7 +18,7 @@ and enqueues the chosen files. This makes M1 independently demoable and testable
 
 ## Goals
 
-- Launch a long-lived daemon via `clop-kde daemon` that shows a system-tray icon.
+- Launch a long-lived daemon via `klop daemon` that shows a system-tray icon.
 - Tray menu: **Optimize files…**, a running **Saved: X** total, an **Enabled** toggle,
   **Open config**, and **Quit**.
 - Run optimization jobs off the GUI thread via a worker pool, keeping the UI responsive.
@@ -46,7 +46,7 @@ and enqueues the chosen files. This makes M1 independently demoable and testable
 ## Architecture
 
 ```
-clop-kde daemon
+klop daemon
   └─ QApplication (Qt event loop)
        ├─ TrayApp (QSystemTrayIcon + QMenu)          app.py
        │    "Optimize files…" → QFileDialog → queue.submit(paths)
@@ -130,7 +130,7 @@ integrates with the event loop, and reuses M0's blocking engine untouched.
 
 ### Tray icon asset
 
-- A simple bundled SVG icon shipped in the package (e.g. `clop_kde/assets/tray.svg`), loaded
+- A simple bundled SVG icon shipped in the package (e.g. `klop/assets/tray.svg`), loaded
   via `QIcon`, with a themed-icon fallback (`QIcon.fromTheme("image-x-generic")`) if the asset
   is missing.
 
@@ -158,7 +158,7 @@ integrates with the event loop, and reuses M0's blocking engine untouched.
   injected `pick_files`; assert "Optimize files…" calls `queue.submit` with the picked paths;
   a fake `job_done` updates the "Saved:" text; toggling **Enabled** disables the picker.
   Parts requiring a real system tray are `skipif`-guarded on `QSystemTrayIcon.isSystemTrayAvailable()`.
-- **Manual smoke:** `clop-kde daemon`, pick a JPEG, confirm the notification appears and
+- **Manual smoke:** `klop daemon`, pick a JPEG, confirm the notification appears and
   **Undo** restores the original.
 
 ## Dependencies

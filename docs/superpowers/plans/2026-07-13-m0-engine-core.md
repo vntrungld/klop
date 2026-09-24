@@ -1,10 +1,10 @@
-# Clop-KDE M0 — Skeleton + Engine Core Implementation Plan
+# Klop M0 — Skeleton + Engine Core Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the headless optimization engine for Clop-KDE — config, capability detection, backup/undo, a PNG+JPEG optimizer registry, the Engine that ties them together, and a `clop-kde` CLI that exercises the whole thing with no UI.
+**Goal:** Build the headless optimization engine for Klop — config, capability detection, backup/undo, a PNG+JPEG optimizer registry, the Engine that ties them together, and a `klop` CLI that exercises the whole thing with no UI.
 
-**Architecture:** Pure-Python package (`clop_kde`) with focused modules: media detection, config, capability detection, backup store, optimizer registry, engine, CLI. The engine takes an `OptimizationJob`, backs up the original, runs an external optimizer via `subprocess`, and replaces the original only if the result is meaningfully smaller. No Qt / PySide6 in M0 — it is added in M1 when the daemon gains an event loop.
+**Architecture:** Pure-Python package (`klop`) with focused modules: media detection, config, capability detection, backup store, optimizer registry, engine, CLI. The engine takes an `OptimizationJob`, backs up the original, runs an external optimizer via `subprocess`, and replaces the original only if the result is meaningfully smaller. No Qt / PySide6 in M0 — it is added in M1 when the daemon gains an event loop.
 
 **Tech Stack:** Python 3.11+ (stdlib `tomllib`, `subprocess`, `shutil`), pytest, Pillow (dev-only, to synthesize test images). External optimizer CLIs `pngquant` and `jpegoptim` (optional, detected at runtime).
 
@@ -16,8 +16,8 @@
 - **Only replace the original if the result is smaller** by at least `min_bytes_saved` (default 1 byte, configurable); otherwise keep the original and report `unchanged`.
 - **pngquant is the default PNG optimizer** (lossy); `oxipng` lossless is a later option (not in M0).
 - **All optimizers are optional** — detected at startup; a media type with no available tool is `skipped` cleanly, never an error.
-- **Config path:** `~/.config/clop-kde/config.toml` (missing file → all defaults).
-- **Backups path:** `~/.local/share/clop-kde/backups/<backup_id>/`.
+- **Config path:** `~/.config/klop/config.toml` (missing file → all defaults).
+- **Backups path:** `~/.local/share/klop/backups/<backup_id>/`.
 - **Commit message format** (from the user's global rules): first line `{Action}: {short description}` where Action ∈ {Update, Fix, WIP, Hotfix}, imperative, <72 chars; blank line; body; then `Co-Authored-By: Claude <noreply@anthropic.com>`.
 
 ---
@@ -25,9 +25,9 @@
 ## File Structure
 
 ```
-clop-kde/
+klop/
 ├── pyproject.toml                 # hatchling build, console script, deps
-├── src/clop_kde/
+├── src/klop/
 │   ├── __init__.py                # version
 │   ├── media.py                   # MediaType enum + detect_media_type()
 │   ├── config.py                  # Config dataclass + load_config()
@@ -56,16 +56,16 @@ Each module has one responsibility and a narrow interface, so tasks are independ
 
 **Files:**
 - Create: `pyproject.toml`
-- Create: `src/clop_kde/__init__.py`
-- Create: `src/clop_kde/media.py`
+- Create: `src/klop/__init__.py`
+- Create: `src/klop/media.py`
 - Test: `tests/test_media.py`
 - Test: `tests/conftest.py`
 
 **Interfaces:**
 - Consumes: nothing (first task).
 - Produces:
-  - `clop_kde.media.MediaType` — `Enum` with members `PNG, JPEG, GIF, WEBP, HEIC, VIDEO, PDF, UNKNOWN`.
-  - `clop_kde.media.detect_media_type(path: pathlib.Path) -> MediaType` — magic-bytes first, extension fallback.
+  - `klop.media.MediaType` — `Enum` with members `PNG, JPEG, GIF, WEBP, HEIC, VIDEO, PDF, UNKNOWN`.
+  - `klop.media.detect_media_type(path: pathlib.Path) -> MediaType` — magic-bytes first, extension fallback.
   - conftest fixtures `sample_png(tmp_path) -> Path` and `sample_jpeg(tmp_path) -> Path` (real image files via Pillow).
 
 - [ ] **Step 1: Create `pyproject.toml`**
@@ -76,7 +76,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "clop-kde"
+name = "klop"
 version = "0.0.1"
 description = "Background media optimizer for KDE Plasma 6"
 requires-python = ">=3.11"
@@ -86,16 +86,16 @@ dependencies = []
 dev = ["pytest>=8", "Pillow>=10"]
 
 [project.scripts]
-clop-kde = "clop_kde.cli:main"
+klop = "klop.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/clop_kde"]
+packages = ["src/klop"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 ```
 
-- [ ] **Step 2: Create `src/clop_kde/__init__.py`**
+- [ ] **Step 2: Create `src/klop/__init__.py`**
 
 ```python
 __version__ = "0.0.1"
@@ -107,7 +107,7 @@ Run:
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -q -e ".[dev]"
 ```
-Expected: installs clop-kde (editable), pytest, Pillow with no errors. Use `.venv/bin/pytest` and `.venv/bin/clop-kde` for all later steps.
+Expected: installs klop (editable), pytest, Pillow with no errors. Use `.venv/bin/pytest` and `.venv/bin/klop` for all later steps.
 
 - [ ] **Step 4: Write `tests/conftest.py` with image fixtures**
 
@@ -146,7 +146,7 @@ def sample_jpeg(tmp_path):
 ```python
 from pathlib import Path
 
-from clop_kde.media import MediaType, detect_media_type
+from klop.media import MediaType, detect_media_type
 
 
 def test_detect_png_by_magic(sample_png):
@@ -178,9 +178,9 @@ def test_unknown_for_text(tmp_path):
 - [ ] **Step 6: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_media.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.media'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.media'`.
 
-- [ ] **Step 7: Write `src/clop_kde/media.py`**
+- [ ] **Step 7: Write `src/klop/media.py`**
 
 ```python
 from __future__ import annotations
@@ -259,7 +259,7 @@ Expected: PASS (5 passed).
 - [ ] **Step 9: Commit**
 
 ```bash
-git add pyproject.toml src/clop_kde/__init__.py src/clop_kde/media.py tests/conftest.py tests/test_media.py
+git add pyproject.toml src/klop/__init__.py src/klop/media.py tests/conftest.py tests/test_media.py
 git commit -m "Update: add package scaffold and media type detection
 
 Add the hatchling-based project scaffold with a console-script
@@ -275,23 +275,23 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 2: Config loader
 
 **Files:**
-- Create: `src/clop_kde/config.py`
+- Create: `src/klop/config.py`
 - Test: `tests/test_config.py`
 
 **Interfaces:**
 - Consumes: nothing from other modules.
 - Produces:
-  - `clop_kde.config.Config` — frozen dataclass with fields:
+  - `klop.config.Config` — frozen dataclass with fields:
     `png_lossy: bool = True`, `pngquant_quality: tuple[int, int] = (65, 80)`,
     `jpeg_max_quality: int = 80`, `min_bytes_saved: int = 1`, `concurrency: int = 2`,
     `backup_retention_days: int = 7`, `backup_max_bytes: int = 500 * 1024 * 1024`.
-  - `clop_kde.config.default_config_path() -> Path` → `~/.config/clop-kde/config.toml`.
-  - `clop_kde.config.load_config(path: Path | None = None) -> Config` — missing file → defaults; partial file → defaults for absent keys.
+  - `klop.config.default_config_path() -> Path` → `~/.config/klop/config.toml`.
+  - `klop.config.load_config(path: Path | None = None) -> Config` — missing file → defaults; partial file → defaults for absent keys.
 
 - [ ] **Step 1: Write the failing test `tests/test_config.py`**
 
 ```python
-from clop_kde.config import Config, load_config
+from klop.config import Config, load_config
 
 
 def test_defaults_when_file_missing(tmp_path):
@@ -328,9 +328,9 @@ def test_unknown_keys_are_ignored(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_config.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.config'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.config'`.
 
-- [ ] **Step 3: Write `src/clop_kde/config.py`**
+- [ ] **Step 3: Write `src/klop/config.py`**
 
 ```python
 from __future__ import annotations
@@ -353,7 +353,7 @@ class Config:
 
 
 def default_config_path() -> Path:
-    return Path.home() / ".config" / "clop-kde" / "config.toml"
+    return Path.home() / ".config" / "klop" / "config.toml"
 
 
 _FIELD_NAMES = {f.name for f in dataclasses.fields(Config)}
@@ -386,11 +386,11 @@ Expected: PASS (3 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/clop_kde/config.py tests/test_config.py
+git add src/klop/config.py tests/test_config.py
 git commit -m "Update: add TOML config loader with defaults
 
 Add Config (frozen dataclass) and load_config(), which reads
-~/.config/clop-kde/config.toml, falls back to defaults when the file
+~/.config/klop/config.toml, falls back to defaults when the file
 is missing, fills defaults for absent keys, and ignores unknown keys.
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
@@ -401,22 +401,22 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 3: Capability detection
 
 **Files:**
-- Create: `src/clop_kde/capabilities.py`
+- Create: `src/klop/capabilities.py`
 - Test: `tests/test_capabilities.py`
 
 **Interfaces:**
 - Consumes: nothing.
 - Produces:
-  - `clop_kde.capabilities.KNOWN_TOOLS: tuple[str, ...]` — tool names M0+ cares about (`"pngquant", "jpegoptim", "oxipng", "gifsicle", "cwebp", "vips", "ffmpeg", "gs"`).
-  - `clop_kde.capabilities.detect_capabilities(tools=KNOWN_TOOLS) -> dict[str, str | None]` — maps tool name → absolute path (via `shutil.which`) or `None`.
-  - `clop_kde.capabilities.has_tool(caps: dict[str, str | None], name: str) -> bool`.
+  - `klop.capabilities.KNOWN_TOOLS: tuple[str, ...]` — tool names M0+ cares about (`"pngquant", "jpegoptim", "oxipng", "gifsicle", "cwebp", "vips", "ffmpeg", "gs"`).
+  - `klop.capabilities.detect_capabilities(tools=KNOWN_TOOLS) -> dict[str, str | None]` — maps tool name → absolute path (via `shutil.which`) or `None`.
+  - `klop.capabilities.has_tool(caps: dict[str, str | None], name: str) -> bool`.
 
 - [ ] **Step 1: Write the failing test `tests/test_capabilities.py`**
 
 ```python
 import shutil
 
-from clop_kde.capabilities import KNOWN_TOOLS, detect_capabilities, has_tool
+from klop.capabilities import KNOWN_TOOLS, detect_capabilities, has_tool
 
 
 def test_detects_present_tool(monkeypatch):
@@ -442,9 +442,9 @@ def test_default_scans_known_tools(monkeypatch):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_capabilities.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.capabilities'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.capabilities'`.
 
-- [ ] **Step 3: Write `src/clop_kde/capabilities.py`**
+- [ ] **Step 3: Write `src/klop/capabilities.py`**
 
 ```python
 from __future__ import annotations
@@ -481,7 +481,7 @@ Expected: PASS (3 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/clop_kde/capabilities.py tests/test_capabilities.py
+git add src/klop/capabilities.py tests/test_capabilities.py
 git commit -m "Update: add optimizer capability detection
 
 Add detect_capabilities(), which resolves each known optimizer CLI to
@@ -496,13 +496,13 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 4: BackupStore (backup / restore / prune)
 
 **Files:**
-- Create: `src/clop_kde/backup.py`
+- Create: `src/klop/backup.py`
 - Test: `tests/test_backup.py`
 
 **Interfaces:**
 - Consumes: nothing.
 - Produces:
-  - `clop_kde.backup.BackupStore(root: Path)`.
+  - `klop.backup.BackupStore(root: Path)`.
   - `.backup(path: Path) -> str` — copies the file into `root/<backup_id>/`, writes a `meta.json` recording the absolute original path and timestamp; returns `backup_id`.
   - `.restore(backup_id: str) -> Path` — copies the backed-up file back to its original path; returns that path. Raises `KeyError` if the id is unknown.
   - `.prune(max_age_days: int, max_bytes: int, now: float | None = None) -> int` — deletes oldest backups over the age or total-size budget; returns count removed.
@@ -516,7 +516,7 @@ from pathlib import Path
 
 import pytest
 
-from clop_kde.backup import BackupStore
+from klop.backup import BackupStore
 
 
 def test_backup_then_restore_roundtrip(tmp_path):
@@ -580,9 +580,9 @@ def test_prune_by_size_keeps_newest(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_backup.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.backup'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.backup'`.
 
-- [ ] **Step 3: Write `src/clop_kde/backup.py`**
+- [ ] **Step 3: Write `src/klop/backup.py`**
 
 ```python
 from __future__ import annotations
@@ -679,7 +679,7 @@ Expected: PASS (5 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/clop_kde/backup.py tests/test_backup.py
+git add src/klop/backup.py tests/test_backup.py
 git commit -m "Update: add BackupStore for undo support
 
 Add BackupStore with backup/restore roundtrip (copying originals into
@@ -694,15 +694,15 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 5: Optimizer registry (pngquant + jpegoptim)
 
 **Files:**
-- Create: `src/clop_kde/optimizers.py`
+- Create: `src/klop/optimizers.py`
 - Test: `tests/test_optimizers.py`
 
 **Interfaces:**
-- Consumes: `clop_kde.media.MediaType`, `clop_kde.config.Config`, `clop_kde.capabilities` (dict form).
+- Consumes: `klop.media.MediaType`, `klop.config.Config`, `klop.capabilities` (dict form).
 - Produces:
-  - `clop_kde.optimizers.Optimizer` — dataclass: `name: str`, `tool: str`, `build_command(inp: Path, out: Path, cfg: Config) -> list[str]`, `use_stdout: bool`.
-  - `clop_kde.optimizers.PNGQUANT: Optimizer` and `clop_kde.optimizers.JPEGOPTIM: Optimizer`.
-  - `clop_kde.optimizers.select_optimizer(media_type, caps, cfg) -> Optimizer | None` — returns the first optimizer for that media type whose `tool` is available, else `None`.
+  - `klop.optimizers.Optimizer` — dataclass: `name: str`, `tool: str`, `build_command(inp: Path, out: Path, cfg: Config) -> list[str]`, `use_stdout: bool`.
+  - `klop.optimizers.PNGQUANT: Optimizer` and `klop.optimizers.JPEGOPTIM: Optimizer`.
+  - `klop.optimizers.select_optimizer(media_type, caps, cfg) -> Optimizer | None` — returns the first optimizer for that media type whose `tool` is available, else `None`.
 
 Notes for the implementer:
 - **pngquant** writes to an explicit output file: `pngquant --quality=<lo>-<hi> --force --skip-if-larger --strip --output <out> -- <in>`. `use_stdout=False`. With `--skip-if-larger` it may exit non-zero and not write `out`; the engine treats a missing/empty `out` as "no improvement".
@@ -713,9 +713,9 @@ Notes for the implementer:
 ```python
 from pathlib import Path
 
-from clop_kde.config import Config
-from clop_kde.media import MediaType
-from clop_kde.optimizers import (
+from klop.config import Config
+from klop.media import MediaType
+from klop.optimizers import (
     JPEGOPTIM,
     PNGQUANT,
     select_optimizer,
@@ -758,9 +758,9 @@ def test_select_unknown_media_returns_none():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_optimizers.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.optimizers'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.optimizers'`.
 
-- [ ] **Step 3: Write `src/clop_kde/optimizers.py`**
+- [ ] **Step 3: Write `src/klop/optimizers.py`**
 
 ```python
 from __future__ import annotations
@@ -837,7 +837,7 @@ Expected: PASS (4 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/clop_kde/optimizers.py tests/test_optimizers.py
+git add src/klop/optimizers.py tests/test_optimizers.py
 git commit -m "Update: add pngquant/jpegoptim optimizer registry
 
 Add the Optimizer dataclass plus PNGQUANT and JPEGOPTIM command
@@ -853,17 +853,17 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 6: Engine (optimize + undo)
 
 **Files:**
-- Create: `src/clop_kde/job.py`
-- Create: `src/clop_kde/engine.py`
+- Create: `src/klop/job.py`
+- Create: `src/klop/engine.py`
 - Test: `tests/test_engine.py`
 
 **Interfaces:**
 - Consumes: `Config`, `BackupStore`, capabilities dict, `select_optimizer`, `detect_media_type`, `Optimizer`.
 - Produces:
-  - `clop_kde.job.OptimizationJob` — dataclass: `source_path: Path`, `media_type: MediaType | None = None` (engine auto-detects when `None`), `options: dict = field(default_factory=dict)`.
-  - `clop_kde.job.JobStatus` — `Enum`: `OPTIMIZED, UNCHANGED, SKIPPED, ERROR`.
-  - `clop_kde.job.JobResult` — dataclass: `status: JobStatus`, `path: Path`, `original_size: int`, `new_size: int`, `backup_id: str | None`, `message: str = ""`. Property `saved_bytes -> int` = `max(0, original_size - new_size)`.
-  - `clop_kde.engine.Engine(config, backup_store, capabilities, runner=None)` where `runner(cmd: list[str], stdout_path: Path | None) -> int` defaults to a real subprocess runner; injectable for tests.
+  - `klop.job.OptimizationJob` — dataclass: `source_path: Path`, `media_type: MediaType | None = None` (engine auto-detects when `None`), `options: dict = field(default_factory=dict)`.
+  - `klop.job.JobStatus` — `Enum`: `OPTIMIZED, UNCHANGED, SKIPPED, ERROR`.
+  - `klop.job.JobResult` — dataclass: `status: JobStatus`, `path: Path`, `original_size: int`, `new_size: int`, `backup_id: str | None`, `message: str = ""`. Property `saved_bytes -> int` = `max(0, original_size - new_size)`.
+  - `klop.engine.Engine(config, backup_store, capabilities, runner=None)` where `runner(cmd: list[str], stdout_path: Path | None) -> int` defaults to a real subprocess runner; injectable for tests.
   - `.optimize(job: OptimizationJob) -> JobResult`.
   - `.undo(backup_id: str) -> Path`.
 
@@ -883,11 +883,11 @@ from pathlib import Path
 
 import pytest
 
-from clop_kde.backup import BackupStore
-from clop_kde.config import Config
-from clop_kde.engine import Engine
-from clop_kde.job import JobResult, JobStatus, OptimizationJob
-from clop_kde.media import MediaType
+from klop.backup import BackupStore
+from klop.config import Config
+from klop.engine import Engine
+from klop.job import JobResult, JobStatus, OptimizationJob
+from klop.media import MediaType
 
 
 def make_engine(tmp_path, caps, runner):
@@ -984,9 +984,9 @@ def test_real_pngquant_end_to_end(tmp_path, sample_png):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_engine.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.job'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.job'`.
 
-- [ ] **Step 3: Write `src/clop_kde/job.py`**
+- [ ] **Step 3: Write `src/klop/job.py`**
 
 ```python
 from __future__ import annotations
@@ -1026,7 +1026,7 @@ class JobResult:
         return max(0, self.original_size - self.new_size)
 ```
 
-- [ ] **Step 4: Write `src/clop_kde/engine.py`**
+- [ ] **Step 4: Write `src/klop/engine.py`**
 
 ```python
 from __future__ import annotations
@@ -1118,7 +1118,7 @@ Expected: PASS. The 4 injected-runner tests pass unconditionally; `test_real_png
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/job.py src/clop_kde/engine.py tests/test_engine.py
+git add src/klop/job.py src/klop/engine.py tests/test_engine.py
 git commit -m "Update: add optimization engine with backup and undo
 
 Add OptimizationJob/JobResult/JobStatus plus Engine.optimize(), which
@@ -1136,25 +1136,25 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 7: CLI entrypoint
 
 **Files:**
-- Create: `src/clop_kde/cli.py`
+- Create: `src/klop/cli.py`
 - Test: `tests/test_cli.py`
 
 **Interfaces:**
 - Consumes: `load_config`, `default_config_path`, `detect_capabilities`, `BackupStore`, `Engine`, `OptimizationJob`, `JobStatus`.
 - Produces:
-  - `clop_kde.cli.main(argv: list[str] | None = None) -> int` — exit code (0 success; 1 on per-file error).
+  - `klop.cli.main(argv: list[str] | None = None) -> int` — exit code (0 success; 1 on per-file error).
   - Subcommands:
-    - `clop-kde optimize <file>...` — optimize each file, print one line per file (`optimized`/`unchanged`/`skipped` with sizes and backup id).
-    - `clop-kde undo <backup_id>` — restore an original.
-    - `clop-kde caps` — print detected optimizer tools and their paths.
-  - Backup root: `~/.local/share/clop-kde/backups` (via `_backup_root()`; overridable with env `CLOP_KDE_BACKUP_DIR` for tests).
+    - `klop optimize <file>...` — optimize each file, print one line per file (`optimized`/`unchanged`/`skipped` with sizes and backup id).
+    - `klop undo <backup_id>` — restore an original.
+    - `klop caps` — print detected optimizer tools and their paths.
+  - Backup root: `~/.local/share/klop/backups` (via `_backup_root()`; overridable with env `KLOP_BACKUP_DIR` for tests).
 
 - [ ] **Step 1: Write the failing test `tests/test_cli.py`**
 
 ```python
 import shutil
 
-from clop_kde.cli import main
+from klop.cli import main
 
 
 def test_caps_lists_tools(capsys, monkeypatch):
@@ -1167,7 +1167,7 @@ def test_caps_lists_tools(capsys, monkeypatch):
 
 
 def test_optimize_reports_skipped(tmp_path, capsys, monkeypatch):
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     monkeypatch.setattr(shutil, "which", lambda name: None)  # no tools
     f = tmp_path / "a.png"
     f.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 100)
@@ -1186,9 +1186,9 @@ def test_optimize_missing_file_errors(tmp_path, capsys):
 
 
 def test_undo_restores(tmp_path, capsys, monkeypatch):
-    from clop_kde.backup import BackupStore
+    from klop.backup import BackupStore
 
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     f = tmp_path / "a.png"
     f.write_bytes(b"ORIGINAL")
     store = BackupStore(tmp_path / "backups")
@@ -1203,9 +1203,9 @@ def test_undo_restores(tmp_path, capsys, monkeypatch):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_cli.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.cli'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.cli'`.
 
-- [ ] **Step 3: Write `src/clop_kde/cli.py`**
+- [ ] **Step 3: Write `src/klop/cli.py`**
 
 ```python
 from __future__ import annotations
@@ -1223,10 +1223,10 @@ from .job import JobStatus, OptimizationJob
 
 
 def _backup_root() -> Path:
-    override = os.environ.get("CLOP_KDE_BACKUP_DIR")
+    override = os.environ.get("KLOP_BACKUP_DIR")
     if override:
         return Path(override)
-    return Path.home() / ".local" / "share" / "clop-kde" / "backups"
+    return Path.home() / ".local" / "share" / "klop" / "backups"
 
 
 def _human(n: int) -> str:
@@ -1286,7 +1286,7 @@ def _cmd_undo(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="clop-kde")
+    parser = argparse.ArgumentParser(prog="klop")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_opt = sub.add_parser("optimize", help="optimize one or more files")
@@ -1322,16 +1322,16 @@ Expected: all tests pass (real-pngquant test SKIPPED if the tool is absent).
 
 Run:
 ```bash
-.venv/bin/clop-kde caps
-.venv/bin/clop-kde optimize tests/does_not_exist.png; echo "exit=$?"
+.venv/bin/klop caps
+.venv/bin/klop optimize tests/does_not_exist.png; echo "exit=$?"
 ```
 Expected: `caps` prints the tool table; the optimize line prints `error: file not found` to stderr and `exit=1`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/clop_kde/cli.py tests/test_cli.py
-git commit -m "Update: add clop-kde CLI entrypoint
+git add src/klop/cli.py tests/test_cli.py
+git commit -m "Update: add klop CLI entrypoint
 
 Add the argparse-based CLI with optimize/undo/caps subcommands wiring
 config, capability detection, BackupStore, and Engine together. This
@@ -1351,7 +1351,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - BackupStore + undo → Task 4 (+ Engine.undo in Task 6). ✓
 - PNG/JPEG optimizer path → Task 5. ✓
 - Engine (backup → run → smaller-only replace) → Task 6. ✓
-- `clop-kde optimize <file>` CLI entrypoint → Task 7. ✓
+- `klop optimize <file>` CLI entrypoint → Task 7. ✓
 - Tests: smaller-or-unchanged, backup+undo → Task 6 tests. ✓
 - Capability detection via stubbed PATH → Task 3 tests. ✓
 - **Deferred (documented):** async Queue and PySide6 → M1 (needs the Qt event loop; M0 is headless by design).

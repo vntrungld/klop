@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from clop_kde.backup import BackupStore
-from clop_kde.config import Config
-from clop_kde.engine import Engine
-from clop_kde.job import JobResult, JobStatus, OptimizationJob
-from clop_kde.media import MediaType
+from klop.backup import BackupStore
+from klop.config import Config
+from klop.engine import Engine
+from klop.job import JobResult, JobStatus, OptimizationJob
+from klop.media import MediaType
 
 
 def make_engine(tmp_path, caps, runner):

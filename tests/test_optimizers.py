@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from clop_kde.config import Config
-from clop_kde.media import MediaType
-from clop_kde.optimizers import (
+from klop.config import Config
+from klop.media import MediaType
+from klop.optimizers import (
     CWEBP,
     FFMPEG,
     GIFSICLE,

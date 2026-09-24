@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from clop_kde import webfetch
+from klop import webfetch
 
 
 def _png_bytes(tmp_path):
@@ -74,7 +74,7 @@ def test_copy_to_clipboard_uses_wl_copy(tmp_path, monkeypatch):
     assert calls["argv"][0] == "/usr/bin/wl-copy"
     assert "image/png" in calls["argv"]
     # The forked wl-copy daemon inherits our stdout/stderr; if left connected
-    # to a pipe (e.g. `clop-kde optimize-url | cat`), the daemon holds the
+    # to a pipe (e.g. `klop optimize-url | cat`), the daemon holds the
     # pipe open forever and the reader never sees EOF. Must be detached.
     assert calls["kw"].get("stdout") == subprocess.DEVNULL
     assert calls["kw"].get("stderr") == subprocess.DEVNULL

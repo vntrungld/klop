@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QByteArray, QMimeData, QObject, Signal
 
-from clop_kde.clipboard import ClipboardResult, ClipboardWatcher, content_hash, image_to_png_bytes, optimize_image_bytes
-from clop_kde.config import Config
+from klop.clipboard import ClipboardResult, ClipboardWatcher, content_hash, image_to_png_bytes, optimize_image_bytes
+from klop.config import Config
 
 
 def test_content_hash_stable_and_distinct():

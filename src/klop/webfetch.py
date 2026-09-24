@@ -1,6 +1,6 @@
 """Download a remote image, save it, and copy it to the clipboard.
 
-Qt-free: the plasmoid's web-drop path shells out to `clop-kde optimize-url`,
+Qt-free: the plasmoid's web-drop path shells out to `klop optimize-url`,
 which uses this module. Downloading is stdlib urllib; the clipboard copy is an
 optional, detected external tool (wl-copy / xclip).
 """
@@ -40,7 +40,7 @@ _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif"}
 def _urllib_fetch(
     url: str, timeout: float, cap: int = _MAX_DOWNLOAD
 ) -> tuple[bytes, str]:
-    req = urllib.request.Request(url, headers={"User-Agent": "clop-kde"})
+    req = urllib.request.Request(url, headers={"User-Agent": "klop"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read(cap + 1)  # bound memory

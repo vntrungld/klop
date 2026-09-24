@@ -88,7 +88,7 @@ class DBusNotificationBackend(QObject):
     _SERVICE = "org.freedesktop.Notifications"
     _PATH = "/org/freedesktop/Notifications"
 
-    def __init__(self, app_name: str = "Clop-KDE", parent=None):
+    def __init__(self, app_name: str = "Klop", parent=None):
         super().__init__(parent)
         self.on_action: Callable[[int, str], None] | None = None
         self.on_closed: Callable[[int], None] | None = None

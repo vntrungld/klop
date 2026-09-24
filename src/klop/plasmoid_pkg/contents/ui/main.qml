@@ -54,7 +54,7 @@ PlasmoidItem {
             return;
         var args = paths.map(shquote).join(" ");
         pendingCount++;
-        exec.run(shquote(Backend.CLOP_BIN) + " optimize " + args, function (code, out, err) {
+        exec.run(shquote(Backend.KLOP_BIN) + " optimize " + args, function (code, out, err) {
             pendingCount--;
             refreshHistory();
         });
@@ -65,7 +65,7 @@ PlasmoidItem {
         for (var i = 0; i < candidateLists.length; i++) {
             pendingCount++;
             var args = candidateLists[i].map(shquote).join(" ");
-            exec.run(shquote(Backend.CLOP_BIN) + " optimize-url " + args, function (code, out, err) {
+            exec.run(shquote(Backend.KLOP_BIN) + " optimize-url " + args, function (code, out, err) {
                 pendingCount--;
                 refreshHistory();
             });
@@ -89,11 +89,11 @@ PlasmoidItem {
 
     function copyImage(path) {
         if (path)
-            exec.run(shquote(Backend.CLOP_BIN) + " copy " + shquote(path), function () {});
+            exec.run(shquote(Backend.KLOP_BIN) + " copy " + shquote(path), function () {});
     }
 
     function refreshHistory() {
-        exec.run(shquote(Backend.CLOP_BIN) + " history --json", function (code, out, err) {
+        exec.run(shquote(Backend.KLOP_BIN) + " history --json", function (code, out, err) {
             if (code !== 0)
                 return;
             var rows;
@@ -125,7 +125,7 @@ PlasmoidItem {
     function undoEntry(backupId) {
         if (!backupId)
             return;
-        exec.run(shquote(Backend.CLOP_BIN) + " undo " + shquote(backupId), function (code, out, err) {
+        exec.run(shquote(Backend.KLOP_BIN) + " undo " + shquote(backupId), function (code, out, err) {
             refreshHistory();
         });
     }

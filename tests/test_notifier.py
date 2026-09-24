@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from clop_kde.job import JobResult, JobStatus
-from clop_kde.notifier import DBusNotificationBackend, Notifier
+from klop.job import JobResult, JobStatus
+from klop.notifier import DBusNotificationBackend, Notifier
 
 
 class FakeBackend:
@@ -117,14 +117,14 @@ def _notifications_daemon_present(bus):
 def test_real_dbus_backend_send_does_not_raise_with_no_daemon_on_bus(qapp):
     # send() must never raise (TypeError/other exception) regardless of
     # whether a notifications daemon is present on the bus.
-    backend = DBusNotificationBackend(app_name="Clop-KDE-Test")
+    backend = DBusNotificationBackend(app_name="Klop-Test")
 
     nid = backend.send("photo.jpg", "60% smaller", [("undo", "Undo")], "")
     assert isinstance(nid, int)
 
 
 def test_real_dbus_backend_send_with_empty_actions_does_not_raise(qapp):
-    backend = DBusNotificationBackend(app_name="Clop-KDE-Test")
+    backend = DBusNotificationBackend(app_name="Klop-Test")
 
     nid = backend.send("a.png", "Optimization failed: disk full", [], "")
     assert isinstance(nid, int)
@@ -139,10 +139,10 @@ def test_real_dbus_backend_send_creates_notification_on_real_daemon(qapp):
     # replaces_id marshaled as int32 instead of uint32, or actions
     # marshaled as "av" instead of "as") would make the daemon reject the
     # call with UnknownMethod and this would regress to id == 0.
-    backend = DBusNotificationBackend(app_name="Clop-KDE-Test")
+    backend = DBusNotificationBackend(app_name="Klop-Test")
     bus = QDBusConnectionForTest()
 
-    nid = backend.send("clop-kde test", "hello", [("undo", "Undo")], "")
+    nid = backend.send("klop test", "hello", [("undo", "Undo")], "")
 
     if _notifications_daemon_present(bus.connection):
         assert nid > 0

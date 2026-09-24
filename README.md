@@ -17,7 +17,7 @@ system, and keeps a backup so you can undo.
   **Copy** and **Open folder** buttons.
 - **Clipboard auto-optimize.** The tray daemon optimizes images as you copy them
   and puts the smaller version back on the clipboard.
-- **Dolphin integration.** An "Optimize with Clop" entry in the right-click menu
+- **Dolphin integration.** An "Optimize with Klop" entry in the right-click menu
   for PNG, JPEG, GIF, and WebP files.
 - **Undo and history.** Originals are backed up before they are replaced (7 days
   / 500 MB by default). Any result can be restored.
@@ -36,7 +36,7 @@ system, and keeps a backup so you can undo.
 
 HEIC is not optimized on purpose, because it is already an efficient codec.
 Missing tools are detected at runtime, and those formats are skipped. Run
-`clop-kde caps` to see what was found.
+`klop caps` to see what was found.
 
 ## Requirements
 
@@ -59,8 +59,8 @@ cd klop
 python -m venv .venv
 .venv/bin/pip install -e .
 
-.venv/bin/clop-kde install-plasmoid   # panel widget "Klop"
-.venv/bin/clop-kde install-dolphin    # Dolphin right-click menu
+.venv/bin/klop install-plasmoid   # panel widget "Klop"
+.venv/bin/klop install-dolphin    # Dolphin right-click menu
 ```
 
 Then add the **Klop** widget to your panel (right-click the panel → *Add
@@ -73,26 +73,26 @@ kquitapp6 plasmashell && kstart plasmashell
 For clipboard auto-optimize, run the tray daemon. You can add it to autostart:
 
 ```sh
-.venv/bin/clop-kde daemon
+.venv/bin/klop daemon
 ```
 
 ## CLI
 
 ```sh
-clop-kde optimize FILE...        # optimize files in place (with backup)
-clop-kde optimize-url URL...     # download, optimize, save, copy an image
-clop-kde copy FILE               # copy an image to the clipboard
-clop-kde history [--json]        # show optimization history
-clop-kde undo BACKUP_ID          # restore an original
-clop-kde caps                    # show detected optimizer tools
-clop-kde config get [--json]     # print settings
-clop-kde config set key=value... # change settings
+klop optimize FILE...        # optimize files in place (with backup)
+klop optimize-url URL...     # download, optimize, save, copy an image
+klop copy FILE               # copy an image to the clipboard
+klop history [--json]        # show optimization history
+klop undo BACKUP_ID          # restore an original
+klop caps                    # show detected optimizer tools
+klop config get [--json]     # print settings
+klop config set key=value... # change settings
 ```
 
 ## Configuration
 
-Settings live in `~/.config/clop-kde/config.toml`. You can edit them from the
-widget's settings page or with `clop-kde config set`:
+Settings live in `~/.config/klop/config.toml`. You can edit them from the
+widget's settings page or with `klop config set`:
 
 | Key                     | Default           | Meaning                                    |
 | ----------------------- | ----------------- | ------------------------------------------ |
@@ -112,8 +112,8 @@ widget's settings page or with `clop-kde config set`:
 | `clipboard_watch`       | `true`            | Auto-optimize copied images (daemon)       |
 | `web_drop_dir`          | `~/Pictures/Klop` | Where web drops are saved                  |
 
-History is stored in `~/.local/share/clop-kde/history.jsonl` and backups in
-`~/.local/share/clop-kde/backups`.
+History is stored in `~/.local/share/klop/history.jsonl` and backups in
+`~/.local/share/klop/backups`.
 
 ## Development
 

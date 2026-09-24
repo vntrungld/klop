@@ -1,7 +1,7 @@
 """Dolphin (KIO) service-menu integration.
 
-Generates and installs the ``.desktop`` file that puts an "Optimize with Clop"
-entry in Dolphin's right-click menu. It reuses the ``clop-kde optimize`` CLI as
+Generates and installs the ``.desktop`` file that puts an "Optimize with Klop"
+entry in Dolphin's right-click menu. It reuses the ``klop optimize`` CLI as
 its backend, so no extra process is needed.
 """
 
@@ -13,9 +13,9 @@ import sys
 from pathlib import Path
 
 _ASSET_ICON = Path(__file__).parent / "assets" / "tray.svg"
-_FILE_NAME = "clop-kde-optimize.desktop"
+_FILE_NAME = "klop-optimize.desktop"
 
-# Raster image types clop optimizes today (video/PDF/HEIC are later milestones).
+# Raster image types klop optimizes today (video/PDF/HEIC are later milestones).
 _MIME_TYPES = ("image/png", "image/jpeg", "image/gif", "image/webp")
 
 
@@ -24,18 +24,18 @@ def _default_icon() -> str:
 
 
 def resolve_exec() -> str:
-    """Absolute path to the ``clop-kde`` executable.
+    """Absolute path to the ``klop`` executable.
 
     Dolphin does not inherit the user's shell PATH, so the service menu must
-    call clop-kde by absolute path.
+    call klop by absolute path.
     """
-    found = shutil.which("clop-kde")
+    found = shutil.which("klop")
     if found:
         return found
     argv0 = Path(sys.argv[0]).resolve()
-    if argv0.name == "clop-kde":
+    if argv0.name == "klop":
         return str(argv0)
-    return "clop-kde"
+    return "klop"
 
 
 def servicemenu_dir() -> Path:
@@ -50,14 +50,14 @@ def desktop_entry(exec_path: str, icon: str = "image-x-generic") -> str:
     return (
         "[Desktop Entry]\n"
         "Type=Service\n"
-        "Name=Optimize with Clop\n"
+        "Name=Optimize with Klop\n"
         "ServiceTypes=KonqPopupMenu/Plugin\n"
         f"MimeType={mimes}\n"
-        "Actions=optimizeWithClop;\n"
+        "Actions=optimizeWithKlop;\n"
         "X-KDE-Priority=TopLevel\n"
         "\n"
-        "[Desktop Action optimizeWithClop]\n"
-        "Name=Optimize with Clop\n"
+        "[Desktop Action optimizeWithKlop]\n"
+        "Name=Optimize with Klop\n"
         f"Icon={icon}\n"
         f'Exec="{exec_path}" optimize %F\n'
     )

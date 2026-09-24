@@ -1,11 +1,11 @@
-# Clop-KDE — Design Spec
+# Klop — Design Spec
 
 **Date:** 2026-07-13
 **Status:** Approved (design), pending implementation plan
 
 ## Summary
 
-Clop-KDE is a background media-optimization utility for KDE Plasma 6, inspired by
+Klop is a background media-optimization utility for KDE Plasma 6, inspired by
 [Clop](https://github.com/FuzzyIdeas/Clop) on macOS. It transparently optimizes
 images, video, and PDFs — "copy large, paste small, send fast." Optimization is
 triggered from four input sources (clipboard, watched folders, drag-and-drop,
@@ -115,7 +115,7 @@ This backs the overlay's downscale buttons (0.5×, 1–9 presets).
 ### Safety and undo
 
 - Before writing, the original is copied to `BackupStore`
-  (`~/.local/share/clop-kde/backups/<hash>/`).
+  (`~/.local/share/klop/backups/<hash>/`).
 - Optimize writes to a temp file and **only replaces the original if the result is actually
   smaller**; otherwise the original is kept and the job reports "already optimal."
 - **Undo restores from backup.**
@@ -137,7 +137,7 @@ Engine emits `job_done(original_size, new_size, path, backup_id)`:
 
 ### Configuration
 
-Single `~/.config/clop-kde/config.toml`:
+Single `~/.config/klop/config.toml`:
 - enabled sources
 - watched folders (+ per-folder rules)
 - per-type quality
@@ -151,7 +151,7 @@ Each milestone is independently useful and testable.
 
 **M0 — Skeleton + Engine core.**
 Project scaffold, `config.toml` loader, optimizer capability detection, `Engine` + `Queue`
-+ `BackupStore` with the PNG/JPEG path, and a `clop-kde optimize <file>` CLI entrypoint that
++ `BackupStore` with the PNG/JPEG path, and a `klop optimize <file>` CLI entrypoint that
 exercises the whole engine with no UI. Tests: smaller-or-unchanged, backup + undo.
 
 **M1 — Tray + notifications.**
@@ -173,7 +173,7 @@ tray) that accepts dragged-in files and enqueues them — the manual drag-and-dr
 per-folder rules.
 
 **M5 — Dolphin service menu + global hotkey.**
-`.desktop` service menu ("Optimize with Clop") reusing the M0 CLI; global shortcut via
+`.desktop` service menu ("Optimize with Klop") reusing the M0 CLI; global shortcut via
 KGlobalAccel/D-Bus to optimize clipboard or current selection.
 
 **M6 — Video + PDF + HEIC convert.**

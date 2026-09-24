@@ -2,7 +2,7 @@ import dataclasses
 
 import pytest
 
-from clop_kde.config import (
+from klop.config import (
     Config,
     apply_overrides,
     config_to_dict,
@@ -89,14 +89,14 @@ def test_unknown_keys_are_ignored(tmp_path):
 
 
 def test_clipboard_watch_defaults_true(tmp_path):
-    from clop_kde.config import load_config
+    from klop.config import load_config
 
     cfg = load_config(tmp_path / "nope.toml")
     assert cfg.clipboard_watch is True
 
 
 def test_clipboard_watch_can_be_disabled(tmp_path):
-    from clop_kde.config import load_config
+    from klop.config import load_config
 
     p = tmp_path / "config.toml"
     p.write_text("clipboard_watch = false\n")
@@ -136,7 +136,7 @@ def test_toml_serializes_string_with_backslash(tmp_path):
 
 
 def test_new_optimizer_knobs_have_defaults():
-    from clop_kde.config import Config
+    from klop.config import Config
     c = Config()
     assert c.webp_quality == 80
     assert c.gif_lossy == 0
@@ -147,7 +147,7 @@ def test_new_optimizer_knobs_have_defaults():
 
 
 def test_new_knobs_round_trip_through_toml(tmp_path):
-    from clop_kde.config import Config, save_config, load_config
+    from klop.config import Config, save_config, load_config
     path = tmp_path / "config.toml"
     save_config(Config(webp_quality=70, video_crf=30, pdf_setting="screen"), path)
     loaded = load_config(path)
@@ -157,7 +157,7 @@ def test_new_knobs_round_trip_through_toml(tmp_path):
 
 
 def test_new_knobs_apply_overrides():
-    from clop_kde.config import Config, apply_overrides
+    from klop.config import Config, apply_overrides
     c = apply_overrides(Config(), {"video_crf": "23", "video_codec": "libx265"})
     assert c.video_crf == 23
     assert c.video_codec == "libx265"

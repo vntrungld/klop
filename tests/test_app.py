@@ -1,5 +1,5 @@
-from clop_kde import app as app_module
-from clop_kde.app import TrayApp, load_tray_icon
+from klop import app as app_module
+from klop.app import TrayApp, load_tray_icon
 
 
 def test_menu_has_no_file_picker_action(qapp):
@@ -35,7 +35,7 @@ def test_record_saved_accumulates_total_and_updates_text(qapp):
 
 def test_open_config_does_not_raise_when_xdg_open_is_missing(qapp, monkeypatch, tmp_path):
     tray = TrayApp()
-    monkeypatch.setattr(app_module, "default_config_path", lambda: tmp_path / "clop-kde.toml")
+    monkeypatch.setattr(app_module, "default_config_path", lambda: tmp_path / "klop.toml")
 
     def raise_missing(*args, **kwargs):
         raise FileNotFoundError("xdg-open not found")

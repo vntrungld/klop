@@ -8,7 +8,7 @@ from PIL import Image
 def _isolate_history(tmp_path, monkeypatch):
     # Point every test's history at its own tmp file; tests that need a
     # specific path override this with their own monkeypatch.setenv.
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(tmp_path / "history.jsonl"))
 
 
 @pytest.fixture

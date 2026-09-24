@@ -2,8 +2,8 @@ from pathlib import Path
 
 from PySide6.QtGui import QImage
 
-from clop_kde.job import JobResult, JobStatus
-from clop_kde.overlay import ResultOverlay, _drag_mime
+from klop.job import JobResult, JobStatus
+from klop.overlay import ResultOverlay, _drag_mime
 
 
 def _write_png(path: Path) -> None:

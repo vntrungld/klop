@@ -3,26 +3,26 @@
 **Date:** 2026-07-15
 **Status:** Approved (brainstorm), pending spec review
 **Goal:** Match Clop's optimizer coverage. Wire up optimizers for every media
-type `clop-kde` already *detects* but does not yet *optimize* — GIF, WebP, PDF,
+type `klop` already *detects* but does not yet *optimize* — GIF, WebP, PDF,
 Video, and HEIC — including conversions that change the file extension
 (non-mp4 video→MP4). HEIC was implemented then dropped; see "HEIC dropped".
 
 ## Background
 
-Detection ([`media.py`](../../../src/clop_kde/media.py)) already recognizes PNG,
+Detection ([`media.py`](../../../src/klop/media.py)) already recognizes PNG,
 JPEG, GIF, WebP, HEIC, Video (mp4/mov/mkv/webm), and PDF. But the optimizer
-registry ([`optimizers.py`](../../../src/clop_kde/optimizers.py) `_REGISTRY`)
+registry ([`optimizers.py`](../../../src/klop/optimizers.py) `_REGISTRY`)
 only handles **PNG** (`pngquant`) and **JPEG** (`jpegoptim`). Everything else is
 detected and then skipped with "no optimizer available".
 
 The original design's filetype→optimizer table
-([`2026-07-13-clop-kde-design.md`](2026-07-13-clop-kde-design.md)) already
+([`2026-07-13-klop-design.md`](2026-07-13-klop-design.md)) already
 specifies the target tools; this spec implements them (the deferred "M6"
 milestone plus GIF/WebP).
 
 ### Key architectural constraint
 
-The current engine ([`engine.py:50-91`](../../../src/clop_kde/engine.py))
+The current engine ([`engine.py:50-91`](../../../src/klop/engine.py))
 optimizes **in place, keeping the same extension**: it makes a temp file with
 `suffix=source.suffix`, runs the optimizer, and does an atomic
 `os.replace(tmp, source)`. This works for same-extension optimization but breaks
@@ -35,7 +35,7 @@ both cases.
 ### 1. Extend `Optimizer` with an output extension
 
 Add one field to the `Optimizer` dataclass in
-[`optimizers.py`](../../../src/clop_kde/optimizers.py):
+[`optimizers.py`](../../../src/klop/optimizers.py):
 
 ```python
 output_ext: str | None = None   # None → keep source suffix; ".jpg"/".mp4" → convert
@@ -105,7 +105,7 @@ Notes:
 
 ### 3. Engine: convert-aware replace
 
-Modify `Engine.optimize` in [`engine.py`](../../../src/clop_kde/engine.py):
+Modify `Engine.optimize` in [`engine.py`](../../../src/klop/engine.py):
 
 1. `out_suffix = optimizer.output_ext or source.suffix`.
 2. Create the temp file with `suffix=out_suffix` (not `source.suffix`) so
@@ -130,13 +130,13 @@ Modify `Engine.optimize` in [`engine.py`](../../../src/clop_kde/engine.py):
 
 ### 4. Shared dedup helper
 
-Promote `_dedup` from [`webfetch.py:65`](../../../src/clop_kde/webfetch.py) into
+Promote `_dedup` from [`webfetch.py:65`](../../../src/klop/webfetch.py) into
 a shared module (`paths.py`) and import it in both `webfetch.py` and
 `engine.py`. Behavior unchanged (`photo.jpg` → `photo-1.jpg` → …).
 
 ### 5. Config
 
-Add fields to `Config` in [`config.py`](../../../src/clop_kde/config.py):
+Add fields to `Config` in [`config.py`](../../../src/klop/config.py):
 
 ```python
 webp_quality: int = 80
@@ -152,7 +152,7 @@ Load / save / `config get|set` coercion are field-driven (iterate
 `pdf_setting` is validated against the allowed set at command-build time
 (fallback to `ebook` on an unknown value).
 
-**Plasmoid form** ([`ConfigGeneral.qml`](../../../src/clop_kde/plasmoid_pkg/contents/ui/ConfigGeneral.qml))
+**Plasmoid form** ([`ConfigGeneral.qml`](../../../src/klop/plasmoid_pkg/contents/ui/ConfigGeneral.qml))
 hardcodes one control per field, so each new knob needs a matching control plus
 its entry in the save/load JS. Add: WebP quality (SpinBox), GIF lossy (SpinBox),
 PDF setting (ComboBox), video CRF/codec/preset (SpinBox + two fields).
@@ -182,10 +182,10 @@ PDF setting (ComboBox), video CRF/codec/preset (SpinBox + two fields).
 
 ## Affected files
 
-- `src/clop_kde/optimizers.py` — `output_ext` field, new builders + registry.
-- `src/clop_kde/engine.py` — convert-aware replace path.
-- `src/clop_kde/config.py` — new knobs.
-- `src/clop_kde/paths.py` — new; shared `_dedup`.
-- `src/clop_kde/webfetch.py` — import shared `_dedup`.
-- `src/clop_kde/plasmoid_pkg/contents/ui/ConfigGeneral.qml` — new form controls.
+- `src/klop/optimizers.py` — `output_ext` field, new builders + registry.
+- `src/klop/engine.py` — convert-aware replace path.
+- `src/klop/config.py` — new knobs.
+- `src/klop/paths.py` — new; shared `_dedup`.
+- `src/klop/webfetch.py` — import shared `_dedup`.
+- `src/klop/plasmoid_pkg/contents/ui/ConfigGeneral.qml` — new form controls.
 - `tests/` — new optimizer + engine-convert coverage.

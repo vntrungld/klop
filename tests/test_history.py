@@ -1,4 +1,4 @@
-from clop_kde.history import HistoryEntry, HistoryStore
+from klop.history import HistoryEntry, HistoryStore
 
 
 def test_record_appends_and_entries_reads_back(tmp_path):
@@ -45,7 +45,7 @@ def test_ids_unique_across_instances(tmp_path):
 
 
 def test_prune_caps_at_max(tmp_path):
-    from clop_kde.history import _MAX
+    from klop.history import _MAX
 
     store = HistoryStore(tmp_path / "h.jsonl")
     for i in range(_MAX + 5):
@@ -103,30 +103,30 @@ def test_missing_file_reads_empty(tmp_path):
 
 
 def test_default_history_file_uses_env_override(monkeypatch, tmp_path):
-    from clop_kde.history import _default_history_file
+    from klop.history import _default_history_file
 
     target = tmp_path / "custom.jsonl"
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(target))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(target))
     assert _default_history_file() == target
 
 
 def test_default_history_file_falls_back_to_home(monkeypatch):
     from pathlib import Path
 
-    from clop_kde.history import _default_history_file
+    from klop.history import _default_history_file
 
-    monkeypatch.delenv("CLOP_KDE_HISTORY_FILE", raising=False)
+    monkeypatch.delenv("KLOP_HISTORY_FILE", raising=False)
     assert (
         _default_history_file()
-        == Path.home() / ".local" / "share" / "clop-kde" / "history.jsonl"
+        == Path.home() / ".local" / "share" / "klop" / "history.jsonl"
     )
 
 
 def test_store_without_path_uses_env_default(monkeypatch, tmp_path):
-    from clop_kde.history import HistoryStore
+    from klop.history import HistoryStore
 
     target = tmp_path / "envstore.jsonl"
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(target))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(target))
     store = HistoryStore()  # no explicit path -> resolves via env
     store.record("file", "a.png", "/tmp/a.png", 10, 5, backup_id="b1")
     assert target.exists()

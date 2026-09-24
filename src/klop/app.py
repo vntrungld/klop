@@ -43,7 +43,7 @@ class TrayApp:
 
         self._tray = QSystemTrayIcon(icon or load_tray_icon())
         self._tray.setContextMenu(self._menu)
-        self._tray.setToolTip("Clop-KDE")
+        self._tray.setToolTip("Klop")
 
     def show(self) -> None:
         self._tray.show()
@@ -63,7 +63,7 @@ class TrayApp:
         try:
             subprocess.Popen(["xdg-open", str(path)])
         except OSError:
-            self._tray.showMessage("Clop-KDE", f"Could not open config: {path}")
+            self._tray.showMessage("Klop", f"Could not open config: {path}")
 
     def _on_quit(self, _checked: bool = False) -> None:
         QApplication.quit()

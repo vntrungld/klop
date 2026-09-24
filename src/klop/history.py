@@ -11,10 +11,10 @@ _MAX = 200
 
 
 def _default_history_file() -> Path:
-    override = os.environ.get("CLOP_KDE_HISTORY_FILE")
+    override = os.environ.get("KLOP_HISTORY_FILE")
     if override:
         return Path(override)
-    return Path.home() / ".local" / "share" / "clop-kde" / "history.jsonl"
+    return Path.home() / ".local" / "share" / "klop" / "history.jsonl"
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,4 @@
-"""Install the Klop Plasma applet from the package bundled with clop-kde."""
+"""Install the Klop Plasma applet from the package bundled with klop."""
 
 from __future__ import annotations
 
@@ -21,23 +21,23 @@ def plasmoid_dest_dir() -> Path:
     return base / "plasma" / "plasmoids" / PLUGIN_ID
 
 
-def _write_backend_js(pkg_dir: Path, clop_bin: str) -> None:
+def _write_backend_js(pkg_dir: Path, klop_bin: str) -> None:
     code_dir = pkg_dir / "contents" / "code"
     code_dir.mkdir(parents=True, exist_ok=True)
     # A QML .pragma library so every representation shares one constant.
     (code_dir / "backend.js").write_text(
-        f".pragma library\nvar CLOP_BIN = {json.dumps(clop_bin)};\n"
+        f".pragma library\nvar KLOP_BIN = {json.dumps(klop_bin)};\n"
     )
 
 
 def install_plasmoid(
-    *, src: Path | None = None, dest_dir: Path | None = None, clop_bin: str | None = None
+    *, src: Path | None = None, dest_dir: Path | None = None, klop_bin: str | None = None
 ) -> Path:
     src = src or _PKG_SRC
     dest_dir = dest_dir or plasmoid_dest_dir()
-    clop_bin = clop_bin or resolve_exec()
+    klop_bin = klop_bin or resolve_exec()
     if dest_dir.exists():
         shutil.rmtree(dest_dir)
     shutil.copytree(src, dest_dir)
-    _write_backend_js(dest_dir, clop_bin)
+    _write_backend_js(dest_dir, klop_bin)
     return dest_dir

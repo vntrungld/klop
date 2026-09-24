@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from clop_kde.job import JobResult, JobStatus
-from clop_kde.results import ResultRouter
+from klop.job import JobResult, JobStatus
+from klop.results import ResultRouter
 
 
 class FakeTray:

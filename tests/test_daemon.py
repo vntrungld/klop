@@ -1,5 +1,5 @@
-from clop_kde.daemon import build_daemon
-from clop_kde.job import JobResult, JobStatus
+from klop.daemon import build_daemon
+from klop.job import JobResult, JobStatus
 
 
 class FakeEngine:
@@ -78,7 +78,7 @@ def test_build_daemon_file_undo_via_overlay(qapp, tmp_path):
     assert engine.undone == ["b1"]
 
 
-from clop_kde.clipboard import ClipboardResult
+from klop.clipboard import ClipboardResult
 
 
 def test_build_daemon_wires_clipboard_watcher(qapp, monkeypatch):
@@ -132,8 +132,8 @@ def test_build_daemon_enabled_toggle_controls_watcher(qapp):
 
 
 def test_build_daemon_no_watcher_when_disabled(qapp, monkeypatch):
-    import clop_kde.daemon as daemon_mod
-    from clop_kde.config import Config
+    import klop.daemon as daemon_mod
+    from klop.config import Config
 
     monkeypatch.setattr(daemon_mod, "load_config", lambda: Config(clipboard_watch=False))
     d = build_daemon(qapp, engine=FakeEngine(), backend=FakeBackend())

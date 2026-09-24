@@ -1,10 +1,10 @@
-# Clop-KDE M1 — Tray Daemon + Notifications Implementation Plan
+# Klop M1 — Tray Daemon + Notifications Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Wrap the headless M0 engine in a PySide6 system-tray daemon that optimizes files picked from a tray menu, runs jobs off the GUI thread, and shows desktop notifications with an Undo action.
 
-**Architecture:** A new `clop-kde daemon` subcommand starts a `QApplication` with a `QSystemTrayIcon`. A tray "Optimize files…" action feeds an `OptimizationQueue` (a `QThreadPool` wrapping M0's `Engine`), which emits `job_done` on the GUI thread. A `Notifier` shows a desktop notification per result via a D-Bus backend and restores originals when the Undo action fires. The M0 engine, config, and CLI are reused unchanged; the headless CLI never imports Qt.
+**Architecture:** A new `klop daemon` subcommand starts a `QApplication` with a `QSystemTrayIcon`. A tray "Optimize files…" action feeds an `OptimizationQueue` (a `QThreadPool` wrapping M0's `Engine`), which emits `job_done` on the GUI thread. A `Notifier` shows a desktop notification per result via a D-Bus backend and restores originals when the Undo action fires. The M0 engine, config, and CLI are reused unchanged; the headless CLI never imports Qt.
 
 **Tech Stack:** Python 3.11+, PySide6 (Qt6) — `QtCore`, `QtWidgets`, `QtGui`, `QtDBus`; pytest with `QT_QPA_PLATFORM=offscreen` for headless GUI tests. Reuses M0's `Engine`/`BackupStore`/optimizer registry.
 
@@ -17,13 +17,13 @@
 - **Session-only "Saved" total** (no persistence across restarts in M1).
 - **Enabled toggle** gates whether new jobs are accepted (disables the picker when off).
 - **Notification policy:** notify on `OPTIMIZED` (with Undo) and `ERROR` (warning, no action); `UNCHANGED`/`SKIPPED` are silent.
-- **Commit message format:** first line `{Action}: {desc}` where Action ∈ {Update, Fix, WIP, Hotfix}, imperative, <72 chars; blank line; body; `Co-Authored-By: Claude <noreply@anthropic.com>` trailer. Commit with `git -c user.name='Clop-KDE' -c user.email='vn.trungld@gmail.com' commit`.
-- **Dev commands:** use `.venv/bin/pytest` and `.venv/bin/pip`. The `clop-kde` console script is `.venv/bin/clop-kde`.
+- **Commit message format:** first line `{Action}: {desc}` where Action ∈ {Update, Fix, WIP, Hotfix}, imperative, <72 chars; blank line; body; `Co-Authored-By: Claude <noreply@anthropic.com>` trailer. Commit with `git -c user.name='Klop' -c user.email='vn.trungld@gmail.com' commit`.
+- **Dev commands:** use `.venv/bin/pytest` and `.venv/bin/pip`. The `klop` console script is `.venv/bin/klop`.
 
 ## File Structure
 
 ```
-src/clop_kde/
+src/klop/
 ├── format.py        # NEW: human_size(), percent_saved() — shared byte/percent formatting
 ├── queue.py         # NEW: OptimizationQueue (QThreadPool wrapping the engine)
 ├── notifier.py      # NEW: Notifier + NotificationBackend protocol + DBusNotificationBackend
@@ -46,21 +46,21 @@ tests/
 ## Task 1: Extract shared formatting (`format.py`)
 
 **Files:**
-- Create: `src/clop_kde/format.py`
+- Create: `src/klop/format.py`
 - Create: `tests/test_format.py`
-- Modify: `src/clop_kde/cli.py` (remove `_human`; import `human_size`)
+- Modify: `src/klop/cli.py` (remove `_human`; import `human_size`)
 - Modify: `tests/test_cli.py` (remove the 5 `_human` tests + the `_human` import)
 
 **Interfaces:**
 - Consumes: nothing.
 - Produces:
-  - `clop_kde.format.human_size(n: float) -> str` — the exact byte formatter moved from `cli._human` (e.g. `500`→`"500B"`, `2048`→`"2.0KB"`, `1048576`→`"1.0MB"`, `3*1024**3`→`"3.0GB"`).
-  - `clop_kde.format.percent_saved(original: int, new: int) -> int` — integer percent reduction; `0` when `original <= 0`.
+  - `klop.format.human_size(n: float) -> str` — the exact byte formatter moved from `cli._human` (e.g. `500`→`"500B"`, `2048`→`"2.0KB"`, `1048576`→`"1.0MB"`, `3*1024**3`→`"3.0GB"`).
+  - `klop.format.percent_saved(original: int, new: int) -> int` — integer percent reduction; `0` when `original <= 0`.
 
 - [ ] **Step 1: Write the failing test `tests/test_format.py`**
 
 ```python
-from clop_kde.format import human_size, percent_saved
+from klop.format import human_size, percent_saved
 
 
 def test_human_bytes():
@@ -98,9 +98,9 @@ def test_percent_saved_no_reduction():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_format.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.format'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.format'`.
 
-- [ ] **Step 3: Create `src/clop_kde/format.py`**
+- [ ] **Step 3: Create `src/klop/format.py`**
 
 ```python
 from __future__ import annotations
@@ -127,7 +127,7 @@ def percent_saved(original: int, new: int) -> int:
 Run: `.venv/bin/pytest tests/test_format.py -v`
 Expected: PASS (8 passed).
 
-- [ ] **Step 5: Update `src/clop_kde/cli.py` to use the shared formatter**
+- [ ] **Step 5: Update `src/klop/cli.py` to use the shared formatter**
 
 Delete the `_human` function (lines 22-27) and its blank lines. Add `from .format import human_size` to the imports (after the other `from .` imports). Replace the three `_human(` calls in `_cmd_optimize` with `human_size(`. The `_cmd_optimize` optimized branch becomes:
 
@@ -153,10 +153,10 @@ from .job import JobStatus, OptimizationJob
 
 - [ ] **Step 6: Update `tests/test_cli.py` — remove the moved `_human` tests**
 
-Change the import line 7 from `from clop_kde.cli import _human, main` to:
+Change the import line 7 from `from klop.cli import _human, main` to:
 
 ```python
-from clop_kde.cli import main
+from klop.cli import main
 ```
 
 Delete the five test functions `test_human_bytes`, `test_human_kilobytes`, `test_human_kilobytes_fractional`, `test_human_megabytes`, `test_human_gigabytes` (lines 12-29). Leave every other test in the file unchanged.
@@ -169,7 +169,7 @@ Expected: PASS. Count is unchanged overall (5 `_human` tests moved from test_cli
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/clop_kde/format.py tests/test_format.py src/clop_kde/cli.py tests/test_cli.py
+git add src/klop/format.py tests/test_format.py src/klop/cli.py tests/test_cli.py
 git commit -m "Update: extract byte formatting into shared format module
 
 Move the _human byte formatter out of cli.py into format.py as
@@ -186,14 +186,14 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `pyproject.toml` (add PySide6 runtime dependency)
-- Create: `src/clop_kde/queue.py`
+- Create: `src/klop/queue.py`
 - Modify: `tests/conftest.py` (add the `qapp` fixture)
 - Test: `tests/test_queue.py`
 
 **Interfaces:**
-- Consumes: `clop_kde.job.OptimizationJob`, `JobResult`, `JobStatus`.
+- Consumes: `klop.job.OptimizationJob`, `JobResult`, `JobStatus`.
 - Produces:
-  - `clop_kde.queue.OptimizationQueue(optimize_fn, concurrency=2, parent=None)` — a `QObject` with a `job_done = Signal(object)` that carries a `JobResult`.
+  - `klop.queue.OptimizationQueue(optimize_fn, concurrency=2, parent=None)` — a `QObject` with a `job_done = Signal(object)` that carries a `JobResult`.
   - `.submit(paths: list[Path]) -> None` — enqueues one job per path; each runs `optimize_fn(OptimizationJob(source_path=path))` on a `QThreadPool` worker and emits `job_done` with the result (or a synthesized `JobResult(status=ERROR, ...)` if `optimize_fn` raises).
   - `.wait_for_done(msec: int = -1) -> bool` — blocks until all queued jobs finish (used by tests and by graceful shutdown).
   - Shared test fixture `qapp` (in conftest) — a session-scoped offscreen `QApplication`.
@@ -237,8 +237,8 @@ def qapp():
 ```python
 from pathlib import Path
 
-from clop_kde.job import JobResult, JobStatus, OptimizationJob
-from clop_kde.queue import OptimizationQueue
+from klop.job import JobResult, JobStatus, OptimizationJob
+from klop.queue import OptimizationQueue
 
 
 def test_submit_runs_each_path_and_emits_results(qapp, tmp_path):
@@ -282,9 +282,9 @@ def test_worker_exception_becomes_error_result(qapp, tmp_path):
 - [ ] **Step 5: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_queue.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.queue'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.queue'`.
 
-- [ ] **Step 6: Create `src/clop_kde/queue.py`**
+- [ ] **Step 6: Create `src/klop/queue.py`**
 
 ```python
 from __future__ import annotations
@@ -359,7 +359,7 @@ Expected: all pass (47 = 45 + 2).
 - [ ] **Step 9: Commit**
 
 ```bash
-git add pyproject.toml src/clop_kde/queue.py tests/conftest.py tests/test_queue.py
+git add pyproject.toml src/klop/queue.py tests/conftest.py tests/test_queue.py
 git commit -m "Update: add PySide6 OptimizationQueue over the engine
 
 Add PySide6 as a runtime dependency and OptimizationQueue, a QObject
@@ -376,25 +376,25 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 3: Notifier + D-Bus backend (`notifier.py`)
 
 **Files:**
-- Create: `src/clop_kde/notifier.py`
+- Create: `src/klop/notifier.py`
 - Test: `tests/test_notifier.py`
 
 **Interfaces:**
-- Consumes: `clop_kde.format.human_size`, `percent_saved`; `clop_kde.job.JobResult`, `JobStatus`.
+- Consumes: `klop.format.human_size`, `percent_saved`; `klop.job.JobResult`, `JobStatus`.
 - Produces:
-  - `clop_kde.notifier.NotificationBackend` — a `typing.Protocol`: attribute callbacks `on_action: Callable[[int, str], None] | None` and `on_closed: Callable[[int], None] | None`, and method `send(summary: str, body: str, actions: list[tuple[str, str]], icon: str) -> int` (returns a notification id).
-  - `clop_kde.notifier.Notifier(backend, undo_fn, icon="", parent=None)` — a `QObject`.
+  - `klop.notifier.NotificationBackend` — a `typing.Protocol`: attribute callbacks `on_action: Callable[[int, str], None] | None` and `on_closed: Callable[[int], None] | None`, and method `send(summary: str, body: str, actions: list[tuple[str, str]], icon: str) -> int` (returns a notification id).
+  - `klop.notifier.Notifier(backend, undo_fn, icon="", parent=None)` — a `QObject`.
     - `.notify_result(result: JobResult) -> None`: for `OPTIMIZED` with a `backup_id`, sends a notification with body `"<A> → <B> (-<P>%)"` and an `("undo", "Undo")` action, recording `notification_id → (backup_id, filename)`; for `ERROR`, sends a warning with no actions; `UNCHANGED`/`SKIPPED` send nothing.
     - Wires `backend.on_action` / `backend.on_closed`: on `("undo")` for a known id, calls `undo_fn(backup_id)` then sends a `"Restored <filename>"` notification; unknown ids and other action keys are no-ops; `on_closed` forgets the id.
-  - `clop_kde.notifier.DBusNotificationBackend(app_name="Clop-KDE", parent=None)` — the real QtDBus backend (constructed by the daemon; exercised by the manual smoke test, not unit tests).
+  - `klop.notifier.DBusNotificationBackend(app_name="Klop", parent=None)` — the real QtDBus backend (constructed by the daemon; exercised by the manual smoke test, not unit tests).
 
 - [ ] **Step 1: Write the failing test `tests/test_notifier.py`**
 
 ```python
 from pathlib import Path
 
-from clop_kde.job import JobResult, JobStatus
-from clop_kde.notifier import Notifier
+from klop.job import JobResult, JobStatus
+from klop.notifier import Notifier
 
 
 class FakeBackend:
@@ -499,9 +499,9 @@ def test_error_sends_warning_without_action():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_notifier.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.notifier'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.notifier'`.
 
-- [ ] **Step 3: Create `src/clop_kde/notifier.py`**
+- [ ] **Step 3: Create `src/klop/notifier.py`**
 
 ```python
 from __future__ import annotations
@@ -573,7 +573,7 @@ class DBusNotificationBackend(QObject):
     _SERVICE = "org.freedesktop.Notifications"
     _PATH = "/org/freedesktop/Notifications"
 
-    def __init__(self, app_name: str = "Clop-KDE", parent=None):
+    def __init__(self, app_name: str = "Klop", parent=None):
         super().__init__(parent)
         self.on_action: Callable[[int, str], None] | None = None
         self.on_closed: Callable[[int], None] | None = None
@@ -621,7 +621,7 @@ Expected: all pass (54 = 47 + 7).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/notifier.py tests/test_notifier.py
+git add src/klop/notifier.py tests/test_notifier.py
 git commit -m "Update: add notifier with undo action over a D-Bus backend
 
 Add Notifier, which turns JobResults into desktop notifications (with an
@@ -638,18 +638,18 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 4: TrayApp + icon (`app.py`)
 
 **Files:**
-- Create: `src/clop_kde/assets/tray.svg`
-- Create: `src/clop_kde/app.py`
+- Create: `src/klop/assets/tray.svg`
+- Create: `src/klop/app.py`
 - Modify: `pyproject.toml` (ensure the asset ships in the wheel)
 - Test: `tests/test_app.py`
 
 **Interfaces:**
-- Consumes: `clop_kde.format.human_size`; `clop_kde.job.JobStatus`; a queue object exposing `job_done` (Signal carrying `JobResult`) and `submit(paths)`; a notifier exposing `notify_result(result)`.
+- Consumes: `klop.format.human_size`; `klop.job.JobStatus`; a queue object exposing `job_done` (Signal carrying `JobResult`) and `submit(paths)`; a notifier exposing `notify_result(result)`.
 - Produces:
-  - `clop_kde.app.load_tray_icon() -> QIcon` — the bundled `assets/tray.svg`, falling back to `QIcon.fromTheme("image-x-generic")`.
-  - `clop_kde.app.TrayApp(queue, notifier, *, icon=None, pick_files=..., parent=None)` — a `QObject` owning a `QSystemTrayIcon` + `QMenu`. Public attributes for wiring/tests: `optimize_action`, `saved_action`, `enabled_action` (QActions). Methods: `.show()`, `.saved_total() -> int`. Behavior: "Optimize files…" calls `pick_files()` then `queue.submit(paths)` when enabled; toggling `enabled_action` enables/disables the picker; each `OPTIMIZED` `job_done` adds `saved_bytes` to the session total and updates `saved_action` text; every `job_done` is forwarded to `notifier.notify_result`.
+  - `klop.app.load_tray_icon() -> QIcon` — the bundled `assets/tray.svg`, falling back to `QIcon.fromTheme("image-x-generic")`.
+  - `klop.app.TrayApp(queue, notifier, *, icon=None, pick_files=..., parent=None)` — a `QObject` owning a `QSystemTrayIcon` + `QMenu`. Public attributes for wiring/tests: `optimize_action`, `saved_action`, `enabled_action` (QActions). Methods: `.show()`, `.saved_total() -> int`. Behavior: "Optimize files…" calls `pick_files()` then `queue.submit(paths)` when enabled; toggling `enabled_action` enables/disables the picker; each `OPTIMIZED` `job_done` adds `saved_bytes` to the session total and updates `saved_action` text; every `job_done` is forwarded to `notifier.notify_result`.
 
-- [ ] **Step 1: Create the tray icon `src/clop_kde/assets/tray.svg`**
+- [ ] **Step 1: Create the tray icon `src/klop/assets/tray.svg`**
 
 ```xml
 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
@@ -665,7 +665,7 @@ Add this block to `pyproject.toml` (below the existing `[tool.hatch.build.target
 
 ```toml
 [tool.hatch.build.targets.wheel.force-include]
-"src/clop_kde/assets" = "clop_kde/assets"
+"src/klop/assets" = "klop/assets"
 ```
 
 (Editable installs already read the asset from the source tree; this ensures real wheel builds include it.)
@@ -677,8 +677,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
-from clop_kde.app import TrayApp, load_tray_icon
-from clop_kde.job import JobResult, JobStatus
+from klop.app import TrayApp, load_tray_icon
+from klop.job import JobResult, JobStatus
 
 
 class FakeQueue(QObject):
@@ -756,9 +756,9 @@ def test_load_tray_icon_returns_a_non_null_icon(qapp):
 - [ ] **Step 4: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_app.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.app'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.app'`.
 
-- [ ] **Step 5: Create `src/clop_kde/app.py`**
+- [ ] **Step 5: Create `src/klop/app.py`**
 
 ```python
 from __future__ import annotations
@@ -827,7 +827,7 @@ class TrayApp:
 
         self._tray = QSystemTrayIcon(icon or load_tray_icon())
         self._tray.setContextMenu(self._menu)
-        self._tray.setToolTip("Clop-KDE")
+        self._tray.setToolTip("Klop")
 
         queue.job_done.connect(self._on_job_done)
 
@@ -878,7 +878,7 @@ Expected: all pass (59 = 54 + 5).
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/clop_kde/assets/tray.svg src/clop_kde/app.py pyproject.toml tests/test_app.py
+git add src/klop/assets/tray.svg src/klop/app.py pyproject.toml tests/test_app.py
 git commit -m "Update: add system-tray app with picker and savings total
 
 Add TrayApp: a QSystemTrayIcon with an Optimize-files picker that feeds
@@ -894,15 +894,15 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 5: Daemon wiring + `daemon` subcommand (`daemon.py`, `cli.py`)
 
 **Files:**
-- Create: `src/clop_kde/daemon.py`
-- Modify: `src/clop_kde/cli.py` (add the `daemon` subcommand via a lazy import)
+- Create: `src/klop/daemon.py`
+- Modify: `src/klop/cli.py` (add the `daemon` subcommand via a lazy import)
 - Test: `tests/test_daemon.py`
 
 **Interfaces:**
-- Consumes: `clop_kde.app.TrayApp`, `load_tray_icon`; `clop_kde.queue.OptimizationQueue`; `clop_kde.notifier.Notifier`, `DBusNotificationBackend`; `clop_kde.cli._build_engine`; `clop_kde.config.load_config`.
+- Consumes: `klop.app.TrayApp`, `load_tray_icon`; `klop.queue.OptimizationQueue`; `klop.notifier.Notifier`, `DBusNotificationBackend`; `klop.cli._build_engine`; `klop.config.load_config`.
 - Produces:
-  - `clop_kde.daemon.build_daemon(app, *, engine=None, backend=None) -> tuple[TrayApp, OptimizationQueue, Notifier]` — constructs and wires the queue (concurrency from config), notifier (real D-Bus backend unless injected), and tray; returns them without starting the event loop. Injecting `engine`/`backend` keeps it testable without real optimizers or D-Bus.
-  - `clop_kde.daemon.run_daemon() -> int` — creates the `QApplication`, builds the daemon, shows the tray, and runs `app.exec()`.
+  - `klop.daemon.build_daemon(app, *, engine=None, backend=None) -> tuple[TrayApp, OptimizationQueue, Notifier]` — constructs and wires the queue (concurrency from config), notifier (real D-Bus backend unless injected), and tray; returns them without starting the event loop. Injecting `engine`/`backend` keeps it testable without real optimizers or D-Bus.
+  - `klop.daemon.run_daemon() -> int` — creates the `QApplication`, builds the daemon, shows the tray, and runs `app.exec()`.
   - `cli.py` gains a `daemon` subcommand whose handler lazily imports and calls `run_daemon()` (so importing `cli` never imports Qt).
 
 - [ ] **Step 1: Write the failing test `tests/test_daemon.py`**
@@ -910,8 +910,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ```python
 from pathlib import Path
 
-from clop_kde.daemon import build_daemon
-from clop_kde.job import JobResult, JobStatus
+from klop.daemon import build_daemon
+from klop.job import JobResult, JobStatus
 
 
 class FakeEngine:
@@ -973,9 +973,9 @@ def test_build_daemon_undo_action_restores_via_engine(qapp, tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_daemon.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'clop_kde.daemon'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'klop.daemon'`.
 
-- [ ] **Step 3: Create `src/clop_kde/daemon.py`**
+- [ ] **Step 3: Create `src/klop/daemon.py`**
 
 ```python
 from __future__ import annotations
@@ -1009,7 +1009,7 @@ def run_daemon() -> int:
     return app.exec()
 ```
 
-- [ ] **Step 4: Add the `daemon` subcommand to `src/clop_kde/cli.py`**
+- [ ] **Step 4: Add the `daemon` subcommand to `src/klop/cli.py`**
 
 Add this handler (after `_cmd_undo`, before `main`):
 
@@ -1034,7 +1034,7 @@ Expected: PASS (2 passed).
 
 - [ ] **Step 6: Verify the headless CLI still imports without Qt**
 
-Run: `.venv/bin/python -c "import sys, clop_kde.cli; assert 'PySide6' not in sys.modules; print('cli import is Qt-free: OK')"`
+Run: `.venv/bin/python -c "import sys, klop.cli; assert 'PySide6' not in sys.modules; print('cli import is Qt-free: OK')"`
 Expected: prints `cli import is Qt-free: OK` (importing `cli` must not pull in PySide6).
 
 - [ ] **Step 7: Run the full suite**
@@ -1044,17 +1044,17 @@ Expected: all pass (61 = 59 + 2).
 
 - [ ] **Step 8: Manual smoke test (interactive — perform in a Plasma session)**
 
-Run: `.venv/bin/clop-kde daemon`
+Run: `.venv/bin/klop daemon`
 Then: right-click the tray icon → **Optimize files…** → pick a large JPEG. Confirm a desktop notification appears showing the savings with an **Undo** button, that the file shrank on disk, and that clicking **Undo** restores the original. Confirm the tray menu's **Saved:** total increased. Note the outcome in the report. (If not in a graphical session, state that the automated tests cover the wiring and this step was skipped.)
 
 - [ ] **Step 9: Commit**
 
 ```bash
-git add src/clop_kde/daemon.py src/clop_kde/cli.py tests/test_daemon.py
-git commit -m "Update: add daemon wiring and clop-kde daemon subcommand
+git add src/klop/daemon.py src/klop/cli.py tests/test_daemon.py
+git commit -m "Update: add daemon wiring and klop daemon subcommand
 
 Add build_daemon()/run_daemon() wiring the queue, notifier, and tray
-over the engine, and a `clop-kde daemon` subcommand that launches the
+over the engine, and a `klop daemon` subcommand that launches the
 tray app. The subcommand imports Qt lazily so the headless CLI stays
 Qt-free. Injectable engine/backend keep the wiring unit-tested without
 real optimizers or D-Bus.
@@ -1067,7 +1067,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Self-Review
 
 **Spec coverage:**
-- `clop-kde daemon` launches a QApplication + tray → Task 5 (`run_daemon`) + Task 4 (`TrayApp`). ✓
+- `klop daemon` launches a QApplication + tray → Task 5 (`run_daemon`) + Task 4 (`TrayApp`). ✓
 - Tray menu (Optimize files…, Saved: X, Enabled, Open config, Quit) → Task 4. ✓
 - Jobs run off the GUI thread via a worker pool → Task 2 (`OptimizationQueue`/`QThreadPool`). ✓
 - Desktop notification per optimized file with savings + Undo → Task 3 (`Notifier`) + Task 5 wiring. ✓

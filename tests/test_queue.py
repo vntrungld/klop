@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from clop_kde.job import JobResult, JobStatus, OptimizationJob
-from clop_kde.queue import OptimizationQueue
+from klop.job import JobResult, JobStatus, OptimizationJob
+from klop.queue import OptimizationQueue
 
 
 def test_submit_runs_each_path_and_emits_results(qapp, tmp_path):

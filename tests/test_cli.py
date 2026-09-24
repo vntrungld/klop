@@ -2,11 +2,11 @@ import json as _json
 import shutil
 from pathlib import Path
 
-from clop_kde.backup import BackupStore
-from clop_kde.cli import main
-from clop_kde.config import Config
-from clop_kde.engine import Engine
-from clop_kde.history import HistoryStore
+from klop.backup import BackupStore
+from klop.cli import main
+from klop.config import Config
+from klop.engine import Engine
+from klop.history import HistoryStore
 
 
 def test_cli_import_is_qt_free():
@@ -14,7 +14,7 @@ def test_cli_import_is_qt_free():
     import sys
 
     code = (
-        "import clop_kde.cli, sys; "
+        "import klop.cli, sys; "
         "assert 'PySide6' not in sys.modules, "
         "sorted(m for m in sys.modules if 'PySide' in m)"
     )
@@ -32,7 +32,7 @@ def test_caps_lists_tools(capsys, monkeypatch):
 
 
 def test_optimize_reports_skipped(tmp_path, capsys, monkeypatch):
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     monkeypatch.setattr(shutil, "which", lambda name: None)  # no tools
     f = tmp_path / "a.png"
     f.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 100)
@@ -55,9 +55,9 @@ def test_optimize_notifies_when_launched_without_a_terminal(tmp_path, monkeypatc
     # swallowed; the CLI must surface a desktop notification instead.
     import sys
 
-    import clop_kde.cli as cli_mod
+    import klop.cli as cli_mod
 
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     monkeypatch.setattr(shutil, "which", lambda name: None)  # no tools -> skipped
     monkeypatch.setattr(sys.stdout, "isatty", lambda: False)  # not a terminal
     sent = []
@@ -76,9 +76,9 @@ def test_optimize_notifies_when_launched_without_a_terminal(tmp_path, monkeypatc
 def test_optimize_does_not_notify_in_a_terminal(tmp_path, monkeypatch):
     import sys
 
-    import clop_kde.cli as cli_mod
+    import klop.cli as cli_mod
 
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     monkeypatch.setattr(shutil, "which", lambda name: None)
     monkeypatch.setattr(sys.stdout, "isatty", lambda: True)  # interactive terminal
     sent = []
@@ -94,22 +94,22 @@ def test_optimize_does_not_notify_in_a_terminal(tmp_path, monkeypatch):
 def test_install_dolphin_writes_service_menu(tmp_path, capsys, monkeypatch):
     menus = tmp_path / "kio" / "servicemenus"
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-    monkeypatch.setattr(shutil, "which", lambda name: "/opt/bin/clop-kde")
+    monkeypatch.setattr(shutil, "which", lambda name: "/opt/bin/klop")
 
     rc = main(["install-dolphin"])
     out = capsys.readouterr().out
 
     assert rc == 0
-    installed = menus / "clop-kde-optimize.desktop"
+    installed = menus / "klop-optimize.desktop"
     assert installed.exists()
-    assert 'Exec="/opt/bin/clop-kde" optimize %F' in installed.read_text()
+    assert 'Exec="/opt/bin/klop" optimize %F' in installed.read_text()
     assert str(installed) in out
 
 
 def test_undo_restores(tmp_path, capsys, monkeypatch):
-    from clop_kde.backup import BackupStore
+    from klop.backup import BackupStore
 
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     f = tmp_path / "a.png"
     f.write_bytes(b"ORIGINAL")
     store = BackupStore(tmp_path / "backups")
@@ -122,7 +122,7 @@ def test_undo_restores(tmp_path, capsys, monkeypatch):
 
 
 def test_copy_puts_image_on_clipboard(tmp_path, monkeypatch):
-    import clop_kde.cli as cli_mod
+    import klop.cli as cli_mod
 
     f = tmp_path / "a.png"
     f.write_bytes(b"PNG")
@@ -138,7 +138,7 @@ def test_copy_puts_image_on_clipboard(tmp_path, monkeypatch):
 
 
 def test_copy_reports_failure_when_clipboard_unavailable(tmp_path, monkeypatch, capsys):
-    import clop_kde.cli as cli_mod
+    import klop.cli as cli_mod
 
     f = tmp_path / "a.png"
     f.write_bytes(b"PNG")
@@ -153,7 +153,7 @@ def test_optimize_reports_optimized(tmp_path, capsys, monkeypatch, sample_png):
     # pngquant's actual behavior (on this machine pngquant reports the
     # sample PNG as UNCHANGED, which left this branch uncovered). Inject a
     # fake engine with a fake runner that always writes a smaller file.
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
 
     target = tmp_path / "real.png"
     target.write_bytes(sample_png.read_bytes())
@@ -169,7 +169,7 @@ def test_optimize_reports_optimized(tmp_path, capsys, monkeypatch, sample_png):
         capabilities={"pngquant": "/usr/bin/pngquant"},
         runner=fake_runner,
     )
-    monkeypatch.setattr("clop_kde.cli._build_engine", lambda: engine)
+    monkeypatch.setattr("klop.cli._build_engine", lambda: engine)
 
     rc = main(["optimize", str(target)])
     out = capsys.readouterr().out
@@ -205,7 +205,7 @@ class _SelectivelyFailingBackupStore:
 def test_optimize_error_result_prints_to_stderr_and_continues(
     tmp_path, capsys, monkeypatch, sample_png
 ):
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
 
     bad = tmp_path / "bad.png"
     bad.write_bytes(sample_png.read_bytes())
@@ -224,7 +224,7 @@ def test_optimize_error_result_prints_to_stderr_and_continues(
         capabilities={"pngquant": "/usr/bin/pngquant"},
         runner=fake_runner,
     )
-    monkeypatch.setattr("clop_kde.cli._build_engine", lambda: engine)
+    monkeypatch.setattr("klop.cli._build_engine", lambda: engine)
 
     rc = main(["optimize", str(bad), str(good)])
     captured = capsys.readouterr()
@@ -243,14 +243,14 @@ def test_optimize_error_result_prints_to_stderr_and_continues(
 
 
 def test_optimize_records_file_history(tmp_path, monkeypatch):
-    from clop_kde.cli import main
+    from klop.cli import main
 
     hist = tmp_path / "history.jsonl"
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     # Force an OPTIMIZED result without invoking real tools.
-    from clop_kde import cli as cli_mod
-    from clop_kde.job import JobResult, JobStatus
+    from klop import cli as cli_mod
+    from klop.job import JobResult, JobStatus
 
     f = tmp_path / "a.png"
     f.write_bytes(b"x" * 100)
@@ -274,12 +274,12 @@ def test_optimize_convert_uses_result_path_not_deleted_source(tmp_path, capsys, 
     # original source and returns JobResult.path pointing at the new file. The
     # CLI must report and record that new path, not the stale (now-deleted)
     # source path.
-    from clop_kde import cli as cli_mod
-    from clop_kde.job import JobResult, JobStatus
+    from klop import cli as cli_mod
+    from klop.job import JobResult, JobStatus
 
     hist = tmp_path / "history.jsonl"
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
 
     src = tmp_path / "clip.mkv"
     src.write_bytes(b"x" * 100)
@@ -308,12 +308,12 @@ def test_optimize_convert_uses_result_path_not_deleted_source(tmp_path, capsys, 
 
 
 def test_undo_marks_history_undone(tmp_path, monkeypatch):
-    from clop_kde.backup import BackupStore
-    from clop_kde.cli import main
+    from klop.backup import BackupStore
+    from klop.cli import main
 
     hist = tmp_path / "history.jsonl"
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     # Seed a history row and a matching backup.
     store = HistoryStore(hist)
     f = tmp_path / "a.png"
@@ -329,10 +329,10 @@ def test_undo_marks_history_undone(tmp_path, monkeypatch):
 
 
 def test_history_json_outputs_entries(tmp_path, monkeypatch, capsys):
-    from clop_kde.cli import main
+    from klop.cli import main
 
     hist = tmp_path / "history.jsonl"
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(hist))
     HistoryStore(hist).record("file", "a.png", "/tmp/a.png", 100, 40, backup_id="b1")
     rc = main(["history", "--json"])
     assert rc == 0
@@ -343,10 +343,10 @@ def test_history_json_outputs_entries(tmp_path, monkeypatch, capsys):
 
 
 def test_history_table_lists_names(tmp_path, monkeypatch, capsys):
-    from clop_kde.cli import main
+    from klop.cli import main
 
     hist = tmp_path / "history.jsonl"
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(hist))
     HistoryStore(hist).record("clipboard", "Clipboard image", None, 500, 200)
     rc = main(["history"])
     out = capsys.readouterr().out
@@ -367,7 +367,7 @@ def test_config_get_json_has_all_fields(capsys, monkeypatch, tmp_path):
 
 def test_config_set_persists_and_prints_effective(tmp_path, capsys, monkeypatch):
     cfg = tmp_path / "config.toml"
-    import clop_kde.config as config_mod
+    import klop.config as config_mod
 
     monkeypatch.setattr(config_mod, "default_config_path", lambda: cfg)
 
@@ -377,7 +377,7 @@ def test_config_set_persists_and_prints_effective(tmp_path, capsys, monkeypatch)
     printed = _json.loads(out)
     assert printed["png_lossy"] is False and printed["jpeg_max_quality"] == 70
     # persisted so a fresh load sees it
-    from clop_kde.config import load_config
+    from klop.config import load_config
 
     reloaded = load_config(cfg)
     assert reloaded.png_lossy is False and reloaded.jpeg_max_quality == 70
@@ -385,7 +385,7 @@ def test_config_set_persists_and_prints_effective(tmp_path, capsys, monkeypatch)
 
 def test_config_set_unknown_key_errors_and_leaves_file(tmp_path, capsys, monkeypatch):
     cfg = tmp_path / "config.toml"
-    import clop_kde.config as config_mod
+    import klop.config as config_mod
 
     monkeypatch.setattr(config_mod, "default_config_path", lambda: cfg)
 
@@ -405,14 +405,14 @@ def test_config_set_bad_assignment_errors(capsys):
 def test_optimize_url_downloads_optimizes_records_and_prints_path(
     tmp_path, capsys, monkeypatch, sample_png
 ):
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(tmp_path / "history.jsonl"))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     dest = tmp_path / "webdrop"
     dest.mkdir()
 
-    import clop_kde.cli as cli_mod
-    from clop_kde.config import Config
-    from clop_kde.job import JobResult, JobStatus
+    import klop.cli as cli_mod
+    from klop.config import Config
+    from klop.job import JobResult, JobStatus
 
     # cli.py binds `load_config` by name, so patch it on the cli module.
     monkeypatch.setattr(cli_mod, "load_config", lambda path=None: Config(web_drop_dir=str(dest)))
@@ -438,7 +438,7 @@ def test_optimize_url_downloads_optimizes_records_and_prints_path(
     assert rc == 0
     assert str(saved) in out  # prints the saved path
 
-    from clop_kde.history import HistoryStore
+    from klop.history import HistoryStore
 
     entries = HistoryStore().entries()
     assert len(entries) == 1 and entries[0].backup_id == "B1"
@@ -452,14 +452,14 @@ def test_optimize_url_convert_uses_result_path_not_deleted_source(
     # JobResult.path pointing at the new file. The clipboard copy, history
     # record, "saved" message, and notification must all reference that new
     # path, not the deleted download.
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(tmp_path / "history.jsonl"))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     dest = tmp_path / "webdrop"
     dest.mkdir()
 
-    import clop_kde.cli as cli_mod
-    from clop_kde.config import Config
-    from clop_kde.job import JobResult, JobStatus
+    import klop.cli as cli_mod
+    from klop.config import Config
+    from klop.job import JobResult, JobStatus
 
     monkeypatch.setattr(cli_mod, "load_config", lambda path=None: Config(web_drop_dir=str(dest)))
 
@@ -508,7 +508,7 @@ def test_optimize_url_convert_uses_result_path_not_deleted_source(
 
 
 def test_optimize_url_bad_url_exits_1(capsys, monkeypatch):
-    import clop_kde.cli as cli_mod
+    import klop.cli as cli_mod
 
     def boom(url, *, dest_dir, **kw):
         raise ValueError("unsupported URL scheme: ftp")
@@ -524,14 +524,14 @@ def test_optimize_url_falls_back_to_next_candidate(tmp_path, capsys, monkeypatch
     # A browser drag of a linked image (e.g. Facebook) carries the link's page
     # URL plus the <img src>; the page is HTML ("not an image"), so the CLI
     # must try the other candidates in order.
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(tmp_path / "history.jsonl"))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     dest = tmp_path / "webdrop"
     dest.mkdir()
 
-    import clop_kde.cli as cli_mod
-    from clop_kde.config import Config
-    from clop_kde.job import JobResult, JobStatus
+    import klop.cli as cli_mod
+    from klop.config import Config
+    from klop.job import JobResult, JobStatus
 
     monkeypatch.setattr(cli_mod, "load_config", lambda path=None: Config(web_drop_dir=str(dest)))
 
@@ -569,8 +569,8 @@ def test_optimize_url_falls_back_to_next_candidate(tmp_path, capsys, monkeypatch
 
 
 def test_optimize_url_reports_error_when_all_candidates_fail(tmp_path, capsys, monkeypatch):
-    import clop_kde.cli as cli_mod
-    from clop_kde.config import Config
+    import klop.cli as cli_mod
+    from klop.config import Config
 
     monkeypatch.setattr(cli_mod, "load_config", lambda path=None: Config(web_drop_dir=str(tmp_path)))
 
@@ -588,10 +588,10 @@ def test_optimize_url_reports_error_when_all_candidates_fail(tmp_path, capsys, m
 def test_optimize_url_notification_is_detached_with_path(tmp_path, monkeypatch, sample_png):
     # The notification's Copy / Open folder buttons need a process that outlives
     # the CLI, so optimize-url hands the notification to a detached child.
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
-    import clop_kde.cli as cli_mod
-    from clop_kde.config import Config
-    from clop_kde.job import JobResult, JobStatus
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(tmp_path / "history.jsonl"))
+    import klop.cli as cli_mod
+    from klop.config import Config
+    from klop.job import JobResult, JobStatus
 
     monkeypatch.setattr(cli_mod, "load_config", lambda path=None: Config(web_drop_dir=str(tmp_path)))
     saved = tmp_path / "pic.png"
@@ -613,14 +613,14 @@ def test_optimize_url_notification_is_detached_with_path(tmp_path, monkeypatch, 
     assert main(["optimize-url", "https://ex.com/pic.png"]) == 0
 
     (argv, kw), = spawned
-    assert argv[:4] == [cli_mod.sys.executable, "-m", "clop_kde.cli", "notify-saved"]
+    assert argv[:4] == [cli_mod.sys.executable, "-m", "klop.cli", "notify-saved"]
     assert argv[4] == str(saved)
     assert kw["start_new_session"] is True
     assert kw["stdout"] == cli_mod.subprocess.DEVNULL  # don't hold the plasmoid's pipe
 
 
 def test_notify_saved_copy_action_copies_image(tmp_path, monkeypatch):
-    import clop_kde.cli as cli_mod
+    import klop.cli as cli_mod
 
     pic = tmp_path / "pic.png"
     pic.write_bytes(b"x")
@@ -633,7 +633,7 @@ def test_notify_saved_copy_action_copies_image(tmp_path, monkeypatch):
 
 
 def test_notify_saved_open_action_selects_file_in_file_manager(tmp_path, monkeypatch):
-    import clop_kde.cli as cli_mod
+    import klop.cli as cli_mod
 
     pic = tmp_path / "pic.png"
     pic.write_bytes(b"x")

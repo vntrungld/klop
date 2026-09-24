@@ -27,7 +27,7 @@ class Config:
 
 
 def default_config_path() -> Path:
-    return Path.home() / ".config" / "clop-kde" / "config.toml"
+    return Path.home() / ".config" / "klop" / "config.toml"
 
 
 _FIELD_NAMES = {f.name for f in dataclasses.fields(Config)}

@@ -2,17 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Record every file and clipboard optimization to a durable, queryable JSONL history, exposed via `clop-kde history [--json]` and consumed in-process by the CLI and daemon.
+**Goal:** Record every file and clipboard optimization to a durable, queryable JSONL history, exposed via `klop history [--json]` and consumed in-process by the CLI and daemon.
 
-**Architecture:** A Qt-free `HistoryStore` appends `HistoryEntry` records to `~/.local/share/clop-kde/history.jsonl` (capped at 200, atomic rewrite on prune/mark-undone). Producers (CLI `optimize`, daemon `ResultRouter`, daemon clipboard handler) append; undo paths (CLI `undo`, daemon overlay/notification file-undo) call `mark_undone`. File rows are undoable via `backup_id`; clipboard rows are view-only, and clipboard undo collapses to a single most-recent slot.
+**Architecture:** A Qt-free `HistoryStore` appends `HistoryEntry` records to `~/.local/share/klop/history.jsonl` (capped at 200, atomic rewrite on prune/mark-undone). Producers (CLI `optimize`, daemon `ResultRouter`, daemon clipboard handler) append; undo paths (CLI `undo`, daemon overlay/notification file-undo) call `mark_undone`. File rows are undoable via `backup_id`; clipboard rows are view-only, and clipboard undo collapses to a single most-recent slot.
 
 **Tech Stack:** Python 3.14, standard library only (`json`, `os`, `time`, `tempfile`, `pathlib`, `dataclasses`). PySide6 only in the already-Qt daemon/clipboard units. pytest.
 
 ## Global Constraints
 
-- **Qt-free CLI:** `history.py` and `cli.py` must import no Qt. Guard: after `import clop_kde.cli`, `"PySide6" not in sys.modules`.
+- **Qt-free CLI:** `history.py` and `cli.py` must import no Qt. Guard: after `import klop.cli`, `"PySide6" not in sys.modules`.
 - **No new dependencies.** Standard library only.
-- **Data location:** `~/.local/share/clop-kde/history.jsonl`; override via env `CLOP_KDE_HISTORY_FILE` (points at the file directly).
+- **Data location:** `~/.local/share/klop/history.jsonl`; override via env `KLOP_HISTORY_FILE` (points at the file directly).
 - **History cap:** `_MAX = 200` entries, pruned oldest-first on every `record`.
 - **Commit format** (from CLAUDE.md): first line `{Action}: {desc}` with Action ∈ `Update`/`Fix`/`WIP`/`Hotfix`, imperative, <72 chars; blank line; body; `Co-Authored-By: Claude <noreply@anthropic.com>` trailer. (The example `feat:` messages below are illustrative — translate each to this format, e.g. `Update: add HistoryStore JSONL persistence`.)
 - **Clipboard rows are view-only:** `kind="clipboard"` records carry `path=None`, `backup_id=None`; they never get an Undo.
@@ -22,16 +22,16 @@
 
 ## File Structure
 
-- **Create** `src/clop_kde/history.py` — `HistoryEntry` dataclass + `HistoryStore` (record/entries/mark_undone). Qt-free. (Task 1)
+- **Create** `src/klop/history.py` — `HistoryEntry` dataclass + `HistoryStore` (record/entries/mark_undone). Qt-free. (Task 1)
 - **Create** `tests/test_history.py` — unit tests for the store. (Task 1)
-- **Modify** `tests/conftest.py` — autouse fixture isolating `CLOP_KDE_HISTORY_FILE` per test so no test writes the real history file. (Task 1)
-- **Modify** `src/clop_kde/cli.py` — `optimize` records, `undo` marks undone, new `history` subcommand. (Task 2)
+- **Modify** `tests/conftest.py` — autouse fixture isolating `KLOP_HISTORY_FILE` per test so no test writes the real history file. (Task 1)
+- **Modify** `src/klop/cli.py` — `optimize` records, `undo` marks undone, new `history` subcommand. (Task 2)
 - **Modify** `tests/test_cli.py` — CLI history tests. (Task 2)
-- **Modify** `src/clop_kde/results.py` — `ResultRouter` optional `history`, records file OPTIMIZED. (Task 3)
+- **Modify** `src/klop/results.py` — `ResultRouter` optional `history`, records file OPTIMIZED. (Task 3)
 - **Modify** `tests/test_results.py` — router recording tests. (Task 3)
-- **Modify** `src/clop_kde/clipboard.py` — single-slot clipboard undo. (Task 4)
+- **Modify** `src/klop/clipboard.py` — single-slot clipboard undo. (Task 4)
 - **Modify** `tests/test_clipboard.py` — replace bounded-store test with supersession test. (Task 4)
-- **Modify** `src/clop_kde/daemon.py` — build store, wire router/clipboard/file-undo. (Task 5)
+- **Modify** `src/klop/daemon.py` — build store, wire router/clipboard/file-undo. (Task 5)
 - **Modify** `tests/test_daemon.py` — daemon recording + undo-marks-undone tests. (Task 5)
 
 ---
@@ -39,7 +39,7 @@
 ## Task 1: HistoryStore + HistoryEntry (core)
 
 **Files:**
-- Create: `src/clop_kde/history.py`
+- Create: `src/klop/history.py`
 - Test: `tests/test_history.py`
 - Modify: `tests/conftest.py` (add autouse isolation fixture)
 
@@ -52,14 +52,14 @@
 
 - [ ] **Step 1: Add the autouse history-isolation fixture to conftest**
 
-Add to `tests/conftest.py` (so no test ever writes the real `~/.local/share/clop-kde/history.jsonl`):
+Add to `tests/conftest.py` (so no test ever writes the real `~/.local/share/klop/history.jsonl`):
 
 ```python
 @pytest.fixture(autouse=True)
 def _isolate_history(tmp_path, monkeypatch):
     # Point every test's history at its own tmp file; tests that need a
     # specific path override this with their own monkeypatch.setenv.
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(tmp_path / "history.jsonl"))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(tmp_path / "history.jsonl"))
 ```
 
 - [ ] **Step 2: Write the failing test for record + entries**
@@ -69,7 +69,7 @@ Create `tests/test_history.py`:
 ```python
 import json
 
-from clop_kde.history import HistoryEntry, HistoryStore
+from klop.history import HistoryEntry, HistoryStore
 
 
 def test_record_appends_and_entries_reads_back(tmp_path):
@@ -109,11 +109,11 @@ def test_ids_are_unique(tmp_path):
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run: `pytest tests/test_history.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'clop_kde.history'`.
+Expected: FAIL — `ModuleNotFoundError: No module named 'klop.history'`.
 
 - [ ] **Step 4: Implement history.py**
 
-Create `src/clop_kde/history.py`:
+Create `src/klop/history.py`:
 
 ```python
 from __future__ import annotations
@@ -128,10 +128,10 @@ _MAX = 200
 
 
 def _default_history_file() -> Path:
-    override = os.environ.get("CLOP_KDE_HISTORY_FILE")
+    override = os.environ.get("KLOP_HISTORY_FILE")
     if override:
         return Path(override)
-    return Path.home() / ".local" / "share" / "clop-kde" / "history.jsonl"
+    return Path.home() / ".local" / "share" / "klop" / "history.jsonl"
 
 
 @dataclass(frozen=True)
@@ -268,7 +268,7 @@ Append to `tests/test_history.py`:
 
 ```python
 def test_prune_caps_at_max(tmp_path):
-    from clop_kde.history import _MAX
+    from klop.history import _MAX
 
     store = HistoryStore(tmp_path / "h.jsonl")
     for i in range(_MAX + 5):
@@ -332,17 +332,17 @@ Expected: PASS (11 tests). If prune fails, the implementation from Step 4 alread
 
 - [ ] **Step 8: Verify the store stays Qt-free**
 
-Run: `python -c "import sys, clop_kde.history; assert 'PySide6' not in sys.modules; print('qt-free ok')"`
+Run: `python -c "import sys, klop.history; assert 'PySide6' not in sys.modules; print('qt-free ok')"`
 Expected: prints `qt-free ok`.
 
 - [ ] **Step 9: Commit**
 
 ```bash
-git add src/clop_kde/history.py tests/test_history.py tests/conftest.py
+git add src/klop/history.py tests/test_history.py tests/conftest.py
 git commit -m "Update: add HistoryStore JSONL persistence
 
 Add a Qt-free HistoryStore/HistoryEntry recording each optimization
-to ~/.local/share/clop-kde/history.jsonl, capped at 200 entries with
+to ~/.local/share/klop/history.jsonl, capped at 200 entries with
 atomic prune and mark_undone. File rows are undoable via backup_id;
 clipboard rows are view-only. Reads tolerate a torn trailing line.
 Add an autouse conftest fixture isolating the history file per test.
@@ -355,12 +355,12 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 2: CLI wiring (optimize records, undo marks undone, history command)
 
 **Files:**
-- Modify: `src/clop_kde/cli.py`
+- Modify: `src/klop/cli.py`
 - Test: `tests/test_cli.py`
 
 **Interfaces:**
 - Consumes: `HistoryStore` (Task 1) — `record(...)`, `entries()`, `mark_undone(backup_id)`; `HistoryEntry.to_dict()`, `.saved_bytes`, `.undoable`, `.undone`.
-- Produces: `clop-kde history [--json]` command; side-effect that `optimize` records file rows and `undo` marks them undone.
+- Produces: `klop history [--json]` command; side-effect that `optimize` records file rows and `undo` marks them undone.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -369,20 +369,20 @@ Append to `tests/test_cli.py`:
 ```python
 import json as _json
 
-from clop_kde.history import HistoryStore
+from klop.history import HistoryStore
 
 
 def test_optimize_records_file_history(tmp_path, monkeypatch):
     import shutil as _shutil
 
-    from clop_kde.cli import main
+    from klop.cli import main
 
     hist = tmp_path / "history.jsonl"
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     # Force an OPTIMIZED result without invoking real tools.
-    from clop_kde import cli as cli_mod
-    from clop_kde.job import JobResult, JobStatus
+    from klop import cli as cli_mod
+    from klop.job import JobResult, JobStatus
 
     f = tmp_path / "a.png"
     f.write_bytes(b"x" * 100)
@@ -402,12 +402,12 @@ def test_optimize_records_file_history(tmp_path, monkeypatch):
 
 
 def test_undo_marks_history_undone(tmp_path, monkeypatch):
-    from clop_kde.backup import BackupStore
-    from clop_kde.cli import main
+    from klop.backup import BackupStore
+    from klop.cli import main
 
     hist = tmp_path / "history.jsonl"
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
-    monkeypatch.setenv("CLOP_KDE_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("KLOP_BACKUP_DIR", str(tmp_path / "backups"))
     # Seed a history row and a matching backup.
     store = HistoryStore(hist)
     f = tmp_path / "a.png"
@@ -423,10 +423,10 @@ def test_undo_marks_history_undone(tmp_path, monkeypatch):
 
 
 def test_history_json_outputs_entries(tmp_path, monkeypatch, capsys):
-    from clop_kde.cli import main
+    from klop.cli import main
 
     hist = tmp_path / "history.jsonl"
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(hist))
     HistoryStore(hist).record("file", "a.png", "/tmp/a.png", 100, 40, backup_id="b1")
     rc = main(["history", "--json"])
     assert rc == 0
@@ -437,10 +437,10 @@ def test_history_json_outputs_entries(tmp_path, monkeypatch, capsys):
 
 
 def test_history_table_lists_names(tmp_path, monkeypatch, capsys):
-    from clop_kde.cli import main
+    from klop.cli import main
 
     hist = tmp_path / "history.jsonl"
-    monkeypatch.setenv("CLOP_KDE_HISTORY_FILE", str(hist))
+    monkeypatch.setenv("KLOP_HISTORY_FILE", str(hist))
     HistoryStore(hist).record("clipboard", "Clipboard image", None, 500, 200)
     rc = main(["history"])
     out = capsys.readouterr().out
@@ -456,7 +456,7 @@ Expected: FAIL — `history` is not a valid subcommand / `optimize` writes no hi
 
 - [ ] **Step 3: Implement the CLI changes**
 
-In `src/clop_kde/cli.py`, add imports near the top (after existing imports):
+In `src/klop/cli.py`, add imports near the top (after existing imports):
 
 ```python
 import json
@@ -555,17 +555,17 @@ Expected: PASS (4 tests).
 
 - [ ] **Step 5: Run the full CLI suite + Qt-free guard**
 
-Run: `pytest tests/test_cli.py -v && python -c "import sys, clop_kde.cli; assert 'PySide6' not in sys.modules; print('qt-free ok')"`
+Run: `pytest tests/test_cli.py -v && python -c "import sys, klop.cli; assert 'PySide6' not in sys.modules; print('qt-free ok')"`
 Expected: all CLI tests PASS and `qt-free ok` prints.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/cli.py tests/test_cli.py
+git add src/klop/cli.py tests/test_cli.py
 git commit -m "Update: record and query optimization history in CLI
 
 optimize now records each OPTIMIZED file to the history store; undo
-marks the matching row undone; and a new 'clop-kde history [--json]'
+marks the matching row undone; and a new 'klop history [--json]'
 command reads the store (JSON array for the plasmoid, a table with an
 undoable marker otherwise). CLI stays Qt-free.
 
@@ -577,7 +577,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 3: ResultRouter records file results
 
 **Files:**
-- Modify: `src/clop_kde/results.py`
+- Modify: `src/klop/results.py`
 - Test: `tests/test_results.py`
 
 **Interfaces:**
@@ -624,7 +624,7 @@ Expected: FAIL — `ResultRouter.__init__` takes no `history` argument.
 
 - [ ] **Step 3: Implement the router change**
 
-In `src/clop_kde/results.py`, update `__init__` and `on_job_done`:
+In `src/klop/results.py`, update `__init__` and `on_job_done`:
 
 ```python
     def __init__(self, tray, overlay, notifier, history=None):
@@ -661,13 +661,13 @@ Expected: PASS (all existing + 3 new).
 
 - [ ] **Step 5: Verify results.py stays Qt-free**
 
-Run: `python -c "import sys, clop_kde.results; assert 'PySide6' not in sys.modules; print('qt-free ok')"`
+Run: `python -c "import sys, klop.results; assert 'PySide6' not in sys.modules; print('qt-free ok')"`
 Expected: prints `qt-free ok`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/results.py tests/test_results.py
+git add src/klop/results.py tests/test_results.py
 git commit -m "Update: record file optimizations from ResultRouter
 
 ResultRouter gains an optional history store and records a 'file'
@@ -682,7 +682,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 4: Single-slot clipboard undo
 
 **Files:**
-- Modify: `src/clop_kde/clipboard.py`
+- Modify: `src/klop/clipboard.py`
 - Test: `tests/test_clipboard.py`
 
 **Interfaces:**
@@ -697,7 +697,7 @@ In `tests/test_clipboard.py`, replace `test_watcher_undo_store_is_bounded` (arou
 def test_watcher_undo_is_single_slot(qapp):
     # Only the most-recent clipboard optimization is undoable; a new
     # optimization supersedes the previous token.
-    from clop_kde.clipboard import ClipboardWatcher
+    from klop.clipboard import ClipboardWatcher
 
     results = []
     calls = {"n": 0}
@@ -742,7 +742,7 @@ Expected: FAIL — the test references the new single-slot semantics not yet imp
 
 - [ ] **Step 3: Implement the single-slot undo in clipboard.py**
 
-In `src/clop_kde/clipboard.py`:
+In `src/klop/clipboard.py`:
 
 Remove the `_UNDO_MAX = 16` constant (keep `_SEEN_MAX = 32`):
 
@@ -796,7 +796,7 @@ Expected: PASS — the new single-slot test passes and `test_watcher_undo_restor
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/clop_kde/clipboard.py tests/test_clipboard.py
+git add src/klop/clipboard.py tests/test_clipboard.py
 git commit -m "Update: collapse clipboard undo to a single slot
 
 Only the most-recent clipboard optimization is undoable now; a new
@@ -812,7 +812,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 5: Daemon wiring (store, router, clipboard record, file-undo marks undone)
 
 **Files:**
-- Modify: `src/clop_kde/daemon.py`
+- Modify: `src/klop/daemon.py`
 - Test: `tests/test_daemon.py`
 
 **Interfaces:**
@@ -873,7 +873,7 @@ Expected: FAIL — `build_daemon` has no `history` keyword / no records.
 
 - [ ] **Step 3: Implement the daemon wiring**
 
-In `src/clop_kde/daemon.py`:
+In `src/klop/daemon.py`:
 
 Add the import (with the other `.` imports):
 
@@ -951,13 +951,13 @@ Expected: all tests PASS (prior 114 + the new history/CLI/results/clipboard/daem
 
 - [ ] **Step 6: Verify the Qt-free CLI invariant once more end-to-end**
 
-Run: `python -c "import sys, clop_kde.cli; assert 'PySide6' not in sys.modules; print('qt-free ok')"`
+Run: `python -c "import sys, klop.cli; assert 'PySide6' not in sys.modules; print('qt-free ok')"`
 Expected: prints `qt-free ok` (daemon/clipboard Qt imports are lazy inside `_cmd_daemon`).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/clop_kde/daemon.py tests/test_daemon.py
+git add src/klop/daemon.py tests/test_daemon.py
 git commit -m "Update: wire history recording into the daemon
 
 build_daemon now builds a HistoryStore (injectable), passes it to the
@@ -974,7 +974,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 **1. Spec coverage:**
 - `HistoryStore`/`HistoryEntry` model (record/entries/mark_undone, JSONL, cap 200, atomic rewrite, corrupt-line tolerance) → Task 1. ✓
-- Env override `CLOP_KDE_HISTORY_FILE` → Task 1 (`_default_history_file`). ✓
+- Env override `KLOP_HISTORY_FILE` → Task 1 (`_default_history_file`). ✓
 - CLI `optimize` records, `undo` marks undone, `history [--json]` → Task 2. ✓
 - Router records file OPTIMIZED → Task 3. ✓
 - Clipboard single-slot undo → Task 4. ✓

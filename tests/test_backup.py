@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from clop_kde.backup import BackupStore
+from klop.backup import BackupStore
 
 
 def test_backup_then_restore_roundtrip(tmp_path):
@@ -57,7 +57,7 @@ def test_prune_by_size_keeps_newest(tmp_path, monkeypatch):
     # as chronological oldest-first (not an accident of sha1 digest order).
     fake_times = [1_000_000.0, 2_000_000.0, 3_000_000.0]
     for i, fake_time in enumerate(fake_times):
-        monkeypatch.setattr("clop_kde.backup.time.time", lambda ft=fake_time: ft)
+        monkeypatch.setattr("klop.backup.time.time", lambda ft=fake_time: ft)
         f = tmp_path / f"f{i}.bin"
         f.write_bytes(b"Z" * 1000)
         ids.append(store.backup(f))

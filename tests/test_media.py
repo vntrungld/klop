@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from clop_kde.media import MediaType, detect_media_type
+from klop.media import MediaType, detect_media_type
 
 
 def test_detect_png_by_magic(sample_png):

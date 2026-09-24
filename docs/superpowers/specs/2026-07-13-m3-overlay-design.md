@@ -1,4 +1,4 @@
-# Clop-KDE M3 — Floating Overlay + Drop Target Design Spec
+# Klop M3 — Floating Overlay + Drop Target Design Spec
 
 **Date:** 2026-07-13
 **Status:** Approved (design), pending implementation plan

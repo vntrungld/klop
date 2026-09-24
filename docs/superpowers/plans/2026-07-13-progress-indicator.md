@@ -1,4 +1,4 @@
-# Clop-KDE — In-Progress Indicator Implementation Plan
+# Klop — In-Progress Indicator Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -15,13 +15,13 @@
 - **A pending card is shown for EVERY job, so it must never linger:** file/drop OPTIMIZED replaces it with the result card; ERROR/UNCHANGED/SKIPPED dismiss it; clipboard dismisses it via `finished` (fired on both outcomes).
 - **Clipboard result surface is unchanged** (still the desktop notification); the clipboard pending card is transient.
 - **`results.py` must stay Qt-free** (no Qt imports) — it passes a `Path` to the overlay, which does the pixmap loading.
-- **Commit message format:** first line `{Action}: {desc}` where Action ∈ {Update, Fix, WIP, Hotfix}, imperative, <72 chars; blank line; body; `Co-Authored-By: Claude <noreply@anthropic.com>` trailer. Commit with `git -c user.name='Clop-KDE' -c user.email='vn.trungld@gmail.com' commit`.
+- **Commit message format:** first line `{Action}: {desc}` where Action ∈ {Update, Fix, WIP, Hotfix}, imperative, <72 chars; blank line; body; `Co-Authored-By: Claude <noreply@anthropic.com>` trailer. Commit with `git -c user.name='Klop' -c user.email='vn.trungld@gmail.com' commit`.
 - **Dev commands:** `.venv/bin/pytest`. Baseline suite: 102 passing.
 
 ## File Structure
 
 ```
-src/clop_kde/
+src/klop/
 ├── queue.py      # MODIFY: add job_started signal, emit before running the optimizer
 ├── clipboard.py  # MODIFY: add started/finished signals; emit around a job
 ├── overlay.py    # MODIFY: add QProgressBar + show_pending + _set_thumbnail; refactor show_result
@@ -40,7 +40,7 @@ tests/
 ## Task 1: Queue `job_started` signal
 
 **Files:**
-- Modify: `src/clop_kde/queue.py`
+- Modify: `src/klop/queue.py`
 - Test: `tests/test_queue.py`
 
 **Interfaces:**
@@ -74,7 +74,7 @@ def test_job_started_is_emitted_before_job_done(qapp, tmp_path):
 Run: `.venv/bin/pytest tests/test_queue.py::test_job_started_is_emitted_before_job_done -v`
 Expected: FAIL — `OptimizationQueue` has no attribute `job_started` (AttributeError).
 
-- [ ] **Step 3: Add the signal and emit it in `src/clop_kde/queue.py`**
+- [ ] **Step 3: Add the signal and emit it in `src/klop/queue.py`**
 
 In `_JobRunnable.run` (currently lines 17-21), emit `job_started` before running:
 
@@ -107,7 +107,7 @@ Expected: all pass (103 = 102 + 1).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/queue.py tests/test_queue.py
+git add src/klop/queue.py tests/test_queue.py
 git commit -m "Update: emit job_started before running each optimizer
 
 Add OptimizationQueue.job_started(path), emitted from the worker just
@@ -122,7 +122,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 2: Overlay pending state
 
 **Files:**
-- Modify: `src/clop_kde/overlay.py`
+- Modify: `src/klop/overlay.py`
 - Test: `tests/test_overlay.py`
 
 **Interfaces:**
@@ -176,7 +176,7 @@ def test_show_pending_with_png_bytes_thumbnail(qapp, tmp_path):
 Run: `.venv/bin/pytest tests/test_overlay.py -k "pending or after_pending" -v`
 Expected: FAIL — `ResultOverlay` has no `progress_bar` / `show_pending` (AttributeError).
 
-- [ ] **Step 3: Edit `src/clop_kde/overlay.py`**
+- [ ] **Step 3: Edit `src/klop/overlay.py`**
 
 Add `QProgressBar` to the QtWidgets import:
 
@@ -290,7 +290,7 @@ Expected: all pass (106 = 103 + 3 new overlay tests). Report the actual count.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/overlay.py tests/test_overlay.py
+git add src/klop/overlay.py tests/test_overlay.py
 git commit -m "Update: add pending state to the result overlay
 
 Add an indeterminate progress bar and show_pending(title, thumbnail) to
@@ -307,7 +307,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 3: Clipboard `started` / `finished` signals
 
 **Files:**
-- Modify: `src/clop_kde/clipboard.py`
+- Modify: `src/klop/clipboard.py`
 - Test: `tests/test_clipboard.py`
 
 **Interfaces:**
@@ -356,7 +356,7 @@ def test_watcher_emits_finished_even_when_no_gain(qapp):
 Run: `.venv/bin/pytest tests/test_clipboard.py -k "started or no_gain" -v`
 Expected: FAIL — `ClipboardWatcher` has no `started` / `finished` signals (AttributeError).
 
-- [ ] **Step 3: Edit `src/clop_kde/clipboard.py`**
+- [ ] **Step 3: Edit `src/klop/clipboard.py`**
 
 Add the two signals to the `ClipboardWatcher` class, next to `optimized` (line 91-92):
 
@@ -409,7 +409,7 @@ Expected: all pass (108 = 106 + 2). Report the actual count.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/clipboard.py tests/test_clipboard.py
+git add src/klop/clipboard.py tests/test_clipboard.py
 git commit -m "Update: add started/finished signals to ClipboardWatcher
 
 Emit started(png_bytes) when a clipboard job begins and finished() when
@@ -425,7 +425,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 4: Router pending + dismiss-on-non-optimized
 
 **Files:**
-- Modify: `src/clop_kde/results.py`
+- Modify: `src/klop/results.py`
 - Test: `tests/test_results.py`
 
 **Interfaces:**
@@ -499,7 +499,7 @@ Run: `.venv/bin/pytest tests/test_results.py -v`
 Expected: FAIL — `ResultRouter` has no `on_job_started`; ERROR/UNCHANGED/SKIPPED don't call
 `overlay.dismiss` yet.
 
-- [ ] **Step 3: Rewrite `src/clop_kde/results.py`**
+- [ ] **Step 3: Rewrite `src/klop/results.py`**
 
 ```python
 from __future__ import annotations
@@ -547,7 +547,7 @@ Expected: all pass (109 = 108 + 1 net new results test). Report the actual count
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/clop_kde/results.py tests/test_results.py
+git add src/klop/results.py tests/test_results.py
 git commit -m "Update: show pending card on job start; dismiss on non-optimize
 
 Add ResultRouter.on_job_started, which shows the overlay's pending card
@@ -563,7 +563,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 5: Daemon wiring
 
 **Files:**
-- Modify: `src/clop_kde/daemon.py`
+- Modify: `src/klop/daemon.py`
 - Test: `tests/test_daemon.py`
 
 **Interfaces:**
@@ -634,7 +634,7 @@ def test_build_daemon_wires_clipboard_started_and_finished_to_overlay(qapp):
 Run: `.venv/bin/pytest tests/test_daemon.py -k "job_started or clipboard_started" -v`
 Expected: FAIL — `build_daemon` does not connect `job_started`, nor `watcher.started`/`finished`.
 
-- [ ] **Step 3: Edit `src/clop_kde/daemon.py`**
+- [ ] **Step 3: Edit `src/klop/daemon.py`**
 
 After `queue.job_done.connect(router.on_job_done)` (line 43), add the started wiring:
 
@@ -662,7 +662,7 @@ Expected: PASS (existing daemon tests + the 2 new pending-wiring tests).
 
 - [ ] **Step 5: Confirm the headless CLI is still Qt-free**
 
-Run: `.venv/bin/python -c "import sys, clop_kde.cli; assert 'PySide6' not in sys.modules; print('cli Qt-free: OK')"`
+Run: `.venv/bin/python -c "import sys, klop.cli; assert 'PySide6' not in sys.modules; print('cli Qt-free: OK')"`
 Expected: prints `cli Qt-free: OK`.
 
 - [ ] **Step 6: Run the full suite**
@@ -672,7 +672,7 @@ Expected: all pass (111 = 109 + 2). Report the actual count.
 
 - [ ] **Step 7: Manual smoke test (interactive — perform in a Plasma session)**
 
-Run: `.venv/bin/clop-kde daemon`
+Run: `.venv/bin/klop daemon`
 Then optimize a file (tray picker) and copy an image. Confirm a floating card shows
 "Optimizing <name>…" with the moving busy bar, then swaps to the savings result (file) or
 vanishes as the clipboard notification appears (clipboard). (If not in a graphical session, state
@@ -681,7 +681,7 @@ that the automated tests cover the wiring and this step was skipped.)
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/clop_kde/daemon.py tests/test_daemon.py
+git add src/klop/daemon.py tests/test_daemon.py
 git commit -m "Update: wire the in-progress overlay card into the daemon
 
 Connect queue.job_started to the router's pending card and the clipboard

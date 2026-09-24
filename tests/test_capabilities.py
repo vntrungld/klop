@@ -1,6 +1,6 @@
 import shutil
 
-from clop_kde.capabilities import KNOWN_TOOLS, detect_capabilities, has_tool
+from klop.capabilities import KNOWN_TOOLS, detect_capabilities, has_tool
 
 
 def test_detects_present_tool(monkeypatch):
